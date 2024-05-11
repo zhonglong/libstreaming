@@ -31,6 +31,7 @@ import net.majorkernelpanic.streaming.video.VideoQuality;
 import net.majorkernelpanic.streaming.video.VideoStream;
 import android.content.Context;
 import android.hardware.Camera.CameraInfo;
+import android.media.projection.MediaProjection;
 import android.preference.PreferenceManager;
 
 /**
@@ -68,7 +69,7 @@ public class SessionBuilder {
 	private int mTimeToLive = 64;
 	private int mOrientation = 0;
 	private boolean mFlash = false;
-	private SurfaceView mSurfaceView = null;
+	private MediaProjection mMediaProjection = null;
 	private String mOrigin = null;
 	private String mDestination = null;
 	private Session.Callback mCallback = null;
@@ -134,17 +135,18 @@ public class SessionBuilder {
 
 		if (session.getVideoTrack()!=null) {
 			VideoStream video = session.getVideoTrack();
-			video.setFlashState(mFlash);
 			video.setVideoQuality(mVideoQuality);
-			video.setSurfaceView(mSurfaceView);
-			video.setPreviewOrientation(mOrientation);
 			video.setDestinationPorts(5006);
+			video.setStreamingMethod(MediaStream.MODE_MEDIACODEC_API_2);
+			video.setMediaProjection(mMediaProjection);
 		}
 
 		if (session.getAudioTrack()!=null) {
 			AudioStream audio = session.getAudioTrack();
 			audio.setAudioQuality(mAudioQuality);
 			audio.setDestinationPorts(5004);
+			audio.setStreamingMethod(MediaStream.MODE_MEDIACODEC_API);
+			audio.setMediaProjection(mMediaProjection);
 		}
 
 		return session;
@@ -211,11 +213,8 @@ public class SessionBuilder {
 		return this;
 	}
 
-	/** 
-	 * Sets the SurfaceView required to preview the video stream. 
-	 **/
-	public SessionBuilder setSurfaceView(SurfaceView surfaceView) {
-		mSurfaceView = surfaceView;
+	public SessionBuilder setMediaProjection(MediaProjection projection) {
+		mMediaProjection = projection;
 		return this;
 	}
 	
@@ -278,12 +277,6 @@ public class SessionBuilder {
 		return mFlash;
 	}
 
-	/** Returns the SurfaceView set with {@link #setSurfaceView(SurfaceView)}. */
-	public SurfaceView getSurfaceView() {
-		return mSurfaceView;
-	}
-	
-	
 	/** Returns the time to live set with {@link #setTimeToLive(int)}. */
 	public int getTimeToLive() {
 		return mTimeToLive;
@@ -294,7 +287,7 @@ public class SessionBuilder {
 		return new SessionBuilder()
 		.setDestination(mDestination)
 		.setOrigin(mOrigin)
-		.setSurfaceView(mSurfaceView)
+		.setMediaProjection(mMediaProjection)
 		.setPreviewOrientation(mOrientation)
 		.setVideoQuality(mVideoQuality)
 		.setVideoEncoder(mVideoEncoder)

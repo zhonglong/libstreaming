@@ -86,7 +86,7 @@ public class RtspServer extends Service {
 	protected SharedPreferences mSharedPreferences;
 	protected boolean mEnabled = true;	
 	protected int mPort = DEFAULT_RTSP_PORT;
-	protected WeakHashMap<Session,Object> mSessions = new WeakHashMap<>(2);
+	protected Session sSession;	
 	
 	private RequestListener mListenerThread;
 	private final IBinder mBinder = new LocalBinder();
@@ -172,6 +172,7 @@ public class RtspServer extends Service {
 		if (mEnabled && mListenerThread == null) {
 			try {
 				mListenerThread = new RequestListener();
+				sessionStart();
 			} catch (Exception e) {
 				mListenerThread = null;
 			}
@@ -187,11 +188,7 @@ public class RtspServer extends Service {
 		if (mListenerThread != null) {
 			try {
 				mListenerThread.kill();
-				for ( Session session : mSessions.keySet() ) {
-				    if ( session != null && session.isStreaming() ) {
-						session.stop();
-				    } 
-				}
+				sessionStop();
 			} catch (Exception e) {
 			} finally {
 				mListenerThread = null;
@@ -199,31 +196,6 @@ public class RtspServer extends Service {
 		}
 	}
 
-	/** Returns whether or not the RTSP server is streaming to some client(s). */
-	public boolean isStreaming() {
-		for ( Session session : mSessions.keySet() ) {
-		    if ( session != null && session.isStreaming() ) {
-		    	return true;
-		    } 
-		}
-		return false;
-	}
-	
-	public boolean isEnabled() {
-		return mEnabled;
-	}
-
-	/** Returns the bandwidth consumed by the RTSP server in bits per second. */
-	public long getBitrate() {
-		long bitrate = 0;
-		for ( Session session : mSessions.keySet() ) {
-		    if ( session != null && session.isStreaming() ) {
-		    	bitrate += session.getBitrate();
-		    } 
-		}
-		return bitrate;
-	}
-	
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
 		return START_STICKY;
@@ -308,7 +280,7 @@ public class RtspServer extends Service {
 	 * @return A proper session
 	 */
 	protected Session handleRequest(String uri, Socket client) throws IllegalStateException, IOException {
-		Session session = UriParser.parse(uri);
+		Session session = sSession;
 		session.setOrigin(client.getLocalAddress().getHostAddress());
 		if (session.getDestination()==null) {
 			session.setDestination(client.getInetAddress().getHostAddress());
@@ -422,14 +394,6 @@ public class RtspServer extends Service {
 
 			}
 
-			// Streaming stops when client disconnects
-			boolean streaming = isStreaming();
-			mSession.syncStop();
-			if (streaming && !isStreaming()) {
-				postMessage(MESSAGE_STREAMING_STOPPED);
-			}
-			mSession.release();
-
 			try {
 				mClient.close();
 			} catch (IOException ignore) {}
@@ -456,8 +420,6 @@ public class RtspServer extends Service {
 
                     // Parse the requested URI and configure the session
                     mSession = handleRequest(request.uri, mClient);
-                    mSessions.put(mSession, null);
-                    mSession.syncConfigure();
 
                     String requestContent = mSession.getSessionDescription();
                     String requestAttributes =
@@ -477,7 +439,7 @@ public class RtspServer extends Service {
                 /* ********************************************************************************** */
                 else if (request.method.equalsIgnoreCase("OPTIONS")) {
                     response.status = Response.STATUS_OK;
-                    response.attributes = "Public: DESCRIBE,SETUP,TEARDOWN,PLAY,PAUSE\r\n";
+                    response.attributes = "Public: OPTIONS,DDESCRIBE,SETUP,TEARDOWN,PLAY\r\n";
                     response.status = Response.STATUS_OK;
                 }
 
@@ -505,38 +467,17 @@ public class RtspServer extends Service {
                         return response;
                     }
 
-                    p = Pattern.compile("client_port=(\\d+)(?:-(\\d+))?", Pattern.CASE_INSENSITIVE);
-                    m = p.matcher(request.headers.get("transport"));
-
-                    if (!m.find()) {
-                        int[] ports = mSession.getTrack(trackId).getDestinationPorts();
-                        p1 = ports[0];
-                        p2 = ports[1];
-                    } else {
-                        p1 = Integer.parseInt(m.group(1));
-                        if (m.group(2) == null) {
-                            p2 = p1+1;
-                        } else {
-                            p2 = Integer.parseInt(m.group(2));
-                        }
-                    }
+					int[] ports = mSession.getTrack(trackId).getDestinationPorts();
+					p1 = ports[0];
+					p2 = ports[1];
 
                     ssrc = mSession.getTrack(trackId).getSSRC();
                     src = mSession.getTrack(trackId).getLocalPorts();
                     destination = mSession.getDestination();
 
-                    mSession.getTrack(trackId).setDestinationPorts(p1, p2);
-
-                    boolean streaming = isStreaming();
-                    mSession.syncStart(trackId);
-                    if (!streaming && isStreaming()) {
-                        postMessage(MESSAGE_STREAMING_STARTED);
-                    }
-
                     response.attributes = "Transport: RTP/AVP/UDP;" + (InetAddress.getByName(destination).isMulticastAddress() ? "multicast" : "unicast") +
                             ";destination=" + mSession.getDestination() +
-                            ";client_port=" + p1 + "-" + p2 +
-                            ";server_port=" + src[0] + "-" + src[1] +
+							";port="+p1+"-"+p2+
                             ";ssrc=" + Integer.toHexString(ssrc) +
                             ";mode=play\r\n" +
                             "Session: " + "1185d20035702ca" + "\r\n" +
@@ -642,6 +583,7 @@ public class RtspServer extends Service {
 
 			// Parsing headers of the request
 			while ( (line = input.readLine()) != null && line.length()>3 ) {
+				Log.d(TAG, line);
 				matcher = rexegHeader.matcher(line);
 				matcher.find();
 				request.headers.put(matcher.group(1).toLowerCase(Locale.US),matcher.group(2));
@@ -702,4 +644,18 @@ public class RtspServer extends Service {
 		}
 	}
 
+	private void sessionStart() throws IllegalStateException, IOException {
+		if (sSession == null) {
+			sSession = SessionBuilder.getInstance().build();
+			sSession.syncConfigure();
+			sSession.syncStart();
+		}
+	}
+
+	private void sessionStop() {
+		if (sSession != null) {
+			sSession.syncStop();
+			sSession.release();
+		}
+	}
 }

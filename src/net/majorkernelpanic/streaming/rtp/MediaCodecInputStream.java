@@ -21,10 +21,12 @@ package net.majorkernelpanic.streaming.rtp;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.util.function.BiConsumer;
 import android.annotation.SuppressLint;
 import android.media.MediaCodec;
 import android.media.MediaCodec.BufferInfo;
 import android.media.MediaFormat;
+import android.util.Base64;
 import android.util.Log;
 
 /**
@@ -45,10 +47,16 @@ public class MediaCodecInputStream extends InputStream {
 	private boolean mClosed = false;
 	
 	public MediaFormat mMediaFormat;
+	private BiConsumer<String, String> mCallback;
+	private byte[] mSPS, mPPS;
 
 	public MediaCodecInputStream(MediaCodec mediaCodec) {
 		mMediaCodec = mediaCodec;
 		mBuffers = mMediaCodec.getOutputBuffers();
+	}
+
+	public void setMediaFormatCallback(BiConsumer<String, String> callback) {
+		mCallback = callback;
 	}
 
 	@Override
@@ -70,6 +78,31 @@ public class MediaCodecInputStream extends InputStream {
 				while (!Thread.interrupted() && !mClosed) {
 					mIndex = mMediaCodec.dequeueOutputBuffer(mBufferInfo, 500000);
 					if (mIndex>=0 ){
+						if (mBufferInfo.flags == MediaCodec.BUFFER_FLAG_CODEC_CONFIG && mCallback != null) {
+							byte[] csd = new byte[128];
+							int len = mBufferInfo.size, p = 4, q = 4;
+							mBuffers[mIndex].get(csd,0,len);
+							if (len>0 && csd[0]==0 && csd[1]==0 && csd[2]==0 && csd[3]==1) {
+								// Parses the SPS and PPS, they could be in two different packets and in a different order
+								//depending on the phone so we don't make any assumption about that
+								while (p<len) {
+									while (!(csd[p+0]==0 && csd[p+1]==0 && csd[p+2]==0 && csd[p+3]==1) && p+3<len) p++;
+									if (p+3>=len) p=len;
+									if ((csd[q]&0x1F)==7) {
+										mSPS = new byte[p-q];
+										System.arraycopy(csd, q, mSPS, 0, p-q);
+									} else {
+										mPPS = new byte[p-q];
+										System.arraycopy(csd, q, mPPS, 0, p-q);
+									}
+									p += 4;
+									q = p;
+								}
+								mCallback.accept(Base64.encodeToString(mSPS, 0, mSPS.length, Base64.NO_WRAP),
+										Base64.encodeToString(mPPS, 0, mPPS.length, Base64.NO_WRAP));
+							}
+						}
+
 						//Log.d(TAG,"Index: "+mIndex+" Time: "+mBufferInfo.presentationTimeUs+" size: "+mBufferInfo.size);
 						mBuffer = mBuffers[mIndex];
 						mBuffer.position(0);
@@ -79,6 +112,20 @@ public class MediaCodecInputStream extends InputStream {
 					} else if (mIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
 						mMediaFormat = mMediaCodec.getOutputFormat();
 						Log.i(TAG,mMediaFormat.toString());
+
+						if (mCallback != null) {
+							MediaFormat format = mMediaFormat;
+							ByteBuffer spsb = format.getByteBuffer("csd-0");
+							ByteBuffer ppsb = format.getByteBuffer("csd-1");
+							mSPS = new byte[spsb.capacity() - 4];
+							spsb.position(4);
+							spsb.get(mSPS, 0, mSPS.length);
+							mPPS = new byte[ppsb.capacity() - 4];
+							ppsb.position(4);
+							ppsb.get(mPPS, 0, mPPS.length);
+							mCallback.accept(Base64.encodeToString(mSPS, 0, mSPS.length, Base64.NO_WRAP),
+									Base64.encodeToString(mPPS, 0, mPPS.length, Base64.NO_WRAP));
+						}
 					} else if (mIndex == MediaCodec.INFO_TRY_AGAIN_LATER) {
 						Log.v(TAG,"No buffer available...");
 						//return 0;

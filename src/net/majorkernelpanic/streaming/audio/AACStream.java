@@ -31,7 +31,9 @@ import net.majorkernelpanic.streaming.rtp.MediaCodecInputStream;
 import android.annotation.SuppressLint;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.Editor;
+import android.media.AudioAttributes;
 import android.media.AudioFormat;
+import android.media.AudioPlaybackCaptureConfiguration;
 import android.media.AudioRecord;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
@@ -195,7 +197,32 @@ public class AACStream extends AudioStream {
 
 		((AACLATMPacketizer)mPacketizer).setSamplingRate(mQuality.samplingRate);
 
-		mAudioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC, mQuality.samplingRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize);
+		AudioFormat audioFormat = new AudioFormat.Builder()
+				.setSampleRate(mQuality.samplingRate)
+				.setChannelMask(AudioFormat.CHANNEL_IN_MONO)
+				.setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+				.build();
+		AudioPlaybackCaptureConfiguration captureConfig =
+				new AudioPlaybackCaptureConfiguration.Builder(mMediaProjection)
+						.addMatchingUsage(AudioAttributes.USAGE_MEDIA)
+						.addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
+						.addMatchingUsage(AudioAttributes.USAGE_GAME)
+						.addMatchingUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+						.build();
+		int audioSource = mSettings != null ? Integer.parseInt(mSettings.getString("audio", "0")) : 0;
+		if (audioSource == 0) {
+			mAudioRecord = new AudioRecord.Builder()
+					.setAudioFormat(audioFormat)
+					.setAudioPlaybackCaptureConfig(captureConfig)
+					.setBufferSizeInBytes(bufferSize)
+					.build();
+		} else {
+			mAudioRecord = new AudioRecord(audioSource,
+					mQuality.samplingRate,
+					AudioFormat.CHANNEL_IN_MONO,
+					AudioFormat.ENCODING_PCM_16BIT,
+					bufferSize);
+		}
 		mMediaCodec = MediaCodec.createEncoderByType("audio/mp4a-latm");
 		MediaFormat format = new MediaFormat();
 		format.setString(MediaFormat.KEY_MIME, "audio/mp4a-latm");

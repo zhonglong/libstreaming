@@ -24,7 +24,7 @@ package net.majorkernelpanic.streaming.audio;
 public class AudioQuality {
 
 	/** Default audio stream quality. */
-	public final static AudioQuality DEFAULT_AUDIO_QUALITY = new AudioQuality(8000,32000);
+	public final static AudioQuality DEFAULT_AUDIO_QUALITY = new AudioQuality(44100,128000);
 
 	/**	Represents a quality for a video stream. */ 
 	public AudioQuality() {}

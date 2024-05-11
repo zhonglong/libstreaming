@@ -2,18 +2,12 @@
 
 ## What it does
 
-**libstreaming** is an API that allows you, with only a few lines of code, to stream the camera and/or microphone of an android powered device using RTP over UDP. 
+**libstreaming** is an API that allows you, with only a few lines of code, to stream the screen and/or microphone/playback of an android powered device using RTP over UDP multicast. 
 
 * Android 4.0 or more recent is required.
-* Supported encoders include H.264, H.263, AAC and AMR.
+* Supported encoders include H.264 and AAC.
 
-The first step you will need to achieve to start a streaming session to some peer is called 'signaling'. During this step you will contact the receiver and send a description of the incomming streams. You have three ways to do that with libstreaming.
-
-* With the RTSP client: if you want to stream to a Wowza Media Server, it's the way to go. [The example 3](https://github.com/fyhertz/libstreaming-examples#example-3) illustrates that use case.
-* With the RTSP server: in that case the phone will act as a RTSP server and wait for a RTSP client to request a stream. This use case is illustated in [the example 1](https://github.com/fyhertz/libstreaming-examples#example-1).
-* Or you use libstreaming without using the RTSP protocol at all, and signal the session using SDP over a protocol you like. [The example 2](https://github.com/fyhertz/libstreaming-examples#example-2) illustrates that use case.
-
-The full javadoc documentation of the API is available here: http://guigui.us/libstreaming/doc
+The first step you will need to achieve to start a streaming session to some peer is called 'signaling'. During this step you will contact the receiver and send a description of the incomming streams.
 
 ## How does it work? You should really read this, it's important!
 
@@ -57,9 +51,7 @@ It is not yet enabled by default in libstreaming but you can force it with the [
 Once raw data from the peripherals has been encoded, it is encapsulated in a proper RTP stream. The packetization algorithm that must be used depends on the format of the data (H.264, H.263, AMR and AAC) and are all specified in their respective RFC:
 
 * RFC 3984 for H.264: **H264Packetizer.java**
-* RFC 4629 for H.263: **H263Packetizer.java**
-* RFC 3267 for AMR: **AMRNBPacketizer.java**
-* RFC 3640 for AAC: **AACADTSPacketizer.java** or **AACLATMPacketizer.java**
+* RFC 3640 for AAC: **AACLATMPacketizer.java**
 
 If you are looking for a basic implementation of one of the RFC mentionned above, check the sources of corresponding class.
 
@@ -75,7 +67,7 @@ The [**rtp**](http://guigui.us/libstreaming/doc/net/majorkernelpanic/streaming/r
 <uses-permission android:name="android.permission.INTERNET" />
 <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 <uses-permission android:name="android.permission.RECORD_AUDIO" />
-<uses-permission android:name="android.permission.CAMERA" />
+<uses-permission android:name="android.permission.CAPTURE_AUDIO_OUTPUT" />
 ```
 
 ## How to stream H.264 and AAC
@@ -89,16 +81,13 @@ This example is extracted from [this simple android app](https://github.com/fyhe
 
 		mSession = SessionBuilder.getInstance()
 		.setCallback(this)
-		.setSurfaceView(mSurfaceView)
-		.setPreviewOrientation(90)
 		.setContext(getApplicationContext())
+		.setMediaProjection(getMediaProjection())
 		.setAudioEncoder(SessionBuilder.AUDIO_NONE)
 		.setAudioQuality(new AudioQuality(16000, 32000))
 		.setVideoEncoder(SessionBuilder.VIDEO_H264)
 		.setVideoQuality(new VideoQuality(320,240,20,500000))
 		.build();
-
-		mSurfaceView.getHolder().addCallback(this);
 
         ...
 
@@ -153,8 +142,7 @@ This example is extracted from [this simple android app](https://github.com/fyhe
 
 	@Override
 	public void surfaceCreated(SurfaceHolder holder) {
-        // Starts the preview of the Camera
-		mSession.startPreview();
+        // Starts the preview
 	}
 
 	@Override
@@ -165,7 +153,7 @@ This example is extracted from [this simple android app](https://github.com/fyhe
 
 ```
 
-The **SessionBuilder** simply facilitates the creation of **Session** objects. The call to **setSurfaceView** is needed for video streaming, that should not come up as a surprise since Android requires a valid surface for recording video (it's an annoying limitation of the **MediaRecorder** API). On Android 4.3, streaming with no **SurfaceView** is possible but not yet implemented. The call to **setContext(Context)** is necessary, it allows **H264Stream** objects and **AACStream** objects to store and recover data using **SharedPreferences**.
+The **SessionBuilder** simply facilitates the creation of **Session** objects. The call to **setContext(Context)** is necessary, it allows **H264Stream** objects and **AACStream** objects to store and recover data using **SharedPreferences**.
 
 A **Session** object represents a streaming session to some peer. It contains one or more **Stream** objects that are started (resp. stopped) when the **start()** (resp. **stop()**) method is invoked.
 
@@ -222,7 +210,7 @@ The port is indeed stored as a String in the preferences, there is a good reason
 
 ```java
 SessionBuilder.getInstance()    
-			.setSurfaceHolder(mSurfaceView.getHolder())
+			.setMediaProjection(getMediaProjection())
 			.setContext(getApplicationContext())
 			.setAudioEncoder(SessionBuilder.AUDIO_AAC)
 			.setVideoEncoder(SessionBuilder.VIDEO_H264);
@@ -236,8 +224,4 @@ context.startService(new Intent(this,RtspServer.class));
 // Stops the RTSP server
 context.stopService(new Intent(this,RtspServer.class));
 ```
-
-# Spydroid-ipcamera
-
-Visit [this github page](https://github.com/fyhertz/spydroid-ipcamera) to see how this streaming stack can be used and how it performs.
 

@@ -257,22 +257,6 @@ public class Session {
 		}
 	}
 
-	/**
-	 * Sets a Surface to show a preview of recorded media (video). <br />
-	 * You can call this method at any time and changes will take 
-	 * effect next time you call {@link #start()} or {@link #startPreview()}.
-	 */
-	public void setSurfaceView(final SurfaceView view) {
-		mHandler.post(new Runnable() {
-			@Override
-			public void run() {
-				if (mVideoStream != null) {
-					mVideoStream.setSurfaceView(view);
-				}
-			}				
-		});
-	}
-
 	/** 
 	 * Sets the orientation of the preview. <br />
 	 * You can call this method at any time and changes will take 

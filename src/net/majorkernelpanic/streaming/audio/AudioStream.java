@@ -24,6 +24,7 @@ import java.io.InputStream;
 
 import net.majorkernelpanic.streaming.MediaStream;
 import android.media.MediaRecorder;
+import android.media.projection.MediaProjection;
 import android.os.ParcelFileDescriptor;
 import android.util.Log;
 
@@ -37,6 +38,8 @@ public abstract class AudioStream  extends MediaStream {
 	protected int mAudioEncoder;
 	protected AudioQuality mRequestedQuality = AudioQuality.DEFAULT_AUDIO_QUALITY.clone();
 	protected AudioQuality mQuality = mRequestedQuality.clone();
+
+	protected MediaProjection mMediaProjection;
 	
 	public AudioStream() {
 		setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
@@ -48,6 +51,10 @@ public abstract class AudioStream  extends MediaStream {
 
 	public void setAudioQuality(AudioQuality quality) {
 		mRequestedQuality = quality;
+	}
+
+	public void setMediaProjection(MediaProjection projection) {
+		mMediaProjection = projection;
 	}
 	
 	/** 
