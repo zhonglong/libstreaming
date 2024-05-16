@@ -514,6 +514,12 @@ public class Session {
 		postSessionStopped();
 	}
 
+	public void syncPlay(int id) {
+		if (id == 1 && mVideoStream.isStreaming()) {
+			mHandler.postDelayed(() -> mVideoStream.requestKeyFrame(), 1492);
+		}
+	}
+
 	/**
 	 * Asynchronously starts the camera preview. <br />
 	 * You should of course pass a {@link SurfaceView} to {@link #setSurfaceView(SurfaceView)}
@@ -698,7 +704,7 @@ public class Session {
 		public void run() {
 			if (isStreaming()) { 
 				postBitRate(getBitrate());
-				mHandler.postDelayed(mUpdateBitrate, 500);
+				mHandler.postDelayed(mUpdateBitrate, 1000);
 			} else {
 				postBitRate(0);
 			}

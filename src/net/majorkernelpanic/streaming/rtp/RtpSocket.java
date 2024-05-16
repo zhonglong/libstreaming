@@ -346,7 +346,7 @@ public class RtpSocket implements Runnable {
 		private int mSize;
 		
 		public AverageBitrate() {
-			mSize = 5000/((int)RESOLUTION);
+			mSize = 8000/((int)RESOLUTION);
 			reset();
 		}
 		

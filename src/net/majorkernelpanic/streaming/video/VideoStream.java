@@ -49,6 +49,7 @@ import android.media.MediaFormat;
 import android.media.MediaRecorder;
 import android.media.projection.MediaProjection;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
@@ -291,10 +292,11 @@ public abstract class VideoStream extends MediaStream {
 		mMediaCodec = MediaCodec.createEncoderByType("video/avc");
 		MediaFormat mediaFormat = MediaFormat.createVideoFormat("video/avc", mQuality.resX, mQuality.resY);
 		mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, mQuality.bitrate);
-		mediaFormat.setInteger(MediaFormat.KEY_FRAME_RATE, mQuality.framerate);	
+		mediaFormat.setInteger(MediaFormat.KEY_FRAME_RATE, mQuality.framerate);
+		mediaFormat.setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, mQuality.framerate);
 		mediaFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
-		mediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 3);
-		mediaFormat.setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 100000);
+		mediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 10);
+		mediaFormat.setInteger(MediaFormat.KEY_PREPEND_HEADER_TO_SYNC_FRAMES, 1);
 		mMediaCodec.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
 		mSurface = mMediaCodec.createInputSurface();
 		mMediaCodec.start();
@@ -361,4 +363,19 @@ public abstract class VideoStream extends MediaStream {
 		}
 	}
 
+	// See: https://github.com/JumpingYang001/webrtc/blob/master/sdk/android/src/java/org/webrtc/HardwareVideoEncoder.java
+	public void requestKeyFrame() {
+		// Ideally MediaCodec would honor BUFFER_FLAG_SYNC_FRAME so we could
+		// indicate this in queueInputBuffer() below and guarantee _this_ frame
+		// be encoded as a key frame, but sadly that flag is ignored.  Instead,
+		// we request a key frame "soon".
+		try {
+			Bundle b = new Bundle();
+			b.putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0);
+			mMediaCodec.setParameters(b);
+		} catch (IllegalStateException e) {
+			Log.e(TAG, "requestKeyFrame failed", e);
+			return;
+		}
+	}
 }

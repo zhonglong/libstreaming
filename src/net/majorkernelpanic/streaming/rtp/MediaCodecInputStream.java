@@ -49,6 +49,7 @@ public class MediaCodecInputStream extends InputStream {
 	public MediaFormat mMediaFormat;
 	private BiConsumer<String, String> mCallback;
 	private byte[] mSPS, mPPS;
+	private boolean mFound;
 
 	public MediaCodecInputStream(MediaCodec mediaCodec) {
 		mMediaCodec = mediaCodec;
@@ -78,7 +79,7 @@ public class MediaCodecInputStream extends InputStream {
 				while (!Thread.interrupted() && !mClosed) {
 					mIndex = mMediaCodec.dequeueOutputBuffer(mBufferInfo, 500000);
 					if (mIndex>=0 ){
-						if (mBufferInfo.flags == MediaCodec.BUFFER_FLAG_CODEC_CONFIG && mCallback != null) {
+						if (mBufferInfo.flags == MediaCodec.BUFFER_FLAG_CODEC_CONFIG && !mFound && mCallback != null) {
 							byte[] csd = new byte[128];
 							int len = mBufferInfo.size, p = 4, q = 4;
 							mBuffers[mIndex].get(csd,0,len);
@@ -100,6 +101,7 @@ public class MediaCodecInputStream extends InputStream {
 								}
 								mCallback.accept(Base64.encodeToString(mSPS, 0, mSPS.length, Base64.NO_WRAP),
 										Base64.encodeToString(mPPS, 0, mPPS.length, Base64.NO_WRAP));
+								mFound = true;
 							}
 						}
 
@@ -113,7 +115,7 @@ public class MediaCodecInputStream extends InputStream {
 						mMediaFormat = mMediaCodec.getOutputFormat();
 						Log.i(TAG,mMediaFormat.toString());
 
-						if (mCallback != null) {
+						if (!mFound && mCallback != null) {
 							MediaFormat format = mMediaFormat;
 							ByteBuffer spsb = format.getByteBuffer("csd-0");
 							ByteBuffer ppsb = format.getByteBuffer("csd-1");
@@ -125,6 +127,7 @@ public class MediaCodecInputStream extends InputStream {
 							ppsb.get(mPPS, 0, mPPS.length);
 							mCallback.accept(Base64.encodeToString(mSPS, 0, mSPS.length, Base64.NO_WRAP),
 									Base64.encodeToString(mPPS, 0, mPPS.length, Base64.NO_WRAP));
+							mFound = true;
 						}
 					} else if (mIndex == MediaCodec.INFO_TRY_AGAIN_LATER) {
 						Log.v(TAG,"No buffer available...");

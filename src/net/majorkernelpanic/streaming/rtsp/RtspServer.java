@@ -171,8 +171,8 @@ public class RtspServer extends Service {
 		if (!mEnabled || mRestart) stop();
 		if (mEnabled && mListenerThread == null) {
 			try {
-				mListenerThread = new RequestListener();
 				sessionStart();
+				mListenerThread = new RequestListener();
 			} catch (Exception e) {
 				mListenerThread = null;
 			}
@@ -475,6 +475,9 @@ public class RtspServer extends Service {
                     src = mSession.getTrack(trackId).getLocalPorts();
                     destination = mSession.getDestination();
 
+                    mSession.syncPlay(trackId);
+
+                    // See: https://github.com/iamscottxu/obs-rtspserver/blob/master/rtsp-server/xop/RtspMessage.cpp
                     response.attributes = "Transport: RTP/AVP/UDP;" + (InetAddress.getByName(destination).isMulticastAddress() ? "multicast" : "unicast") +
                             ";destination=" + mSession.getDestination() +
 							";port="+p1+"-"+p2+

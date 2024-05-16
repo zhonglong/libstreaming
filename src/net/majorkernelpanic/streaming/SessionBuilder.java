@@ -30,9 +30,11 @@ import net.majorkernelpanic.streaming.video.H264Stream;
 import net.majorkernelpanic.streaming.video.VideoQuality;
 import net.majorkernelpanic.streaming.video.VideoStream;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.hardware.Camera.CameraInfo;
 import android.media.projection.MediaProjection;
 import android.preference.PreferenceManager;
+import android.text.TextUtils;
 
 /**
  * Call {@link #getInstance()} to get access to the SessionBuilder.
@@ -63,8 +65,8 @@ public class SessionBuilder {
 	private VideoQuality mVideoQuality = VideoQuality.DEFAULT_VIDEO_QUALITY;
 	private AudioQuality mAudioQuality = AudioQuality.DEFAULT_AUDIO_QUALITY;
 	private Context mContext;
-	private int mVideoEncoder = VIDEO_H263; 
-	private int mAudioEncoder = AUDIO_AMRNB;
+	private int mVideoEncoder = VIDEO_H264;
+	private int mAudioEncoder = AUDIO_AAC;
 	private int mCamera = CameraInfo.CAMERA_FACING_BACK;
 	private int mTimeToLive = 64;
 	private int mOrientation = 0;
@@ -75,7 +77,15 @@ public class SessionBuilder {
 	private Session.Callback mCallback = null;
 
 	// Removes the default public constructor
-	private SessionBuilder() {}
+	private SessionBuilder() {
+		// See: https://github.com/iamscottxu/obs-rtspserver/blob/master/rtsp-server/xop/MediaSession.h
+		int udp_multicast = (int) (Math.random() * 0xFFFEFF) + 0x000100;
+		mDestination = String.format("%d.%d.%d.%d",
+				0xE8,
+				(udp_multicast >> 16) & 0xFF,
+				(udp_multicast >> 8) & 0xFF,
+				udp_multicast & 0xFF);
+	}
 
 	// The SessionManager implements the singleton pattern
 	private static volatile SessionBuilder sInstance = null; 
@@ -159,6 +169,10 @@ public class SessionBuilder {
 	 **/
 	public SessionBuilder setContext(Context context) {
 		mContext = context;
+		SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(mContext);
+		mVideoQuality = sp.getBoolean("uhd", false) ? VideoQuality.UHD_VIDEO_QUALITY : VideoQuality.DEFAULT_VIDEO_QUALITY;
+		final String quality = sp.getString("quality", "");
+		if (!TextUtils.isEmpty(quality)) mVideoQuality = VideoQuality.parseQuality(quality);
 		return this;
 	}
 
