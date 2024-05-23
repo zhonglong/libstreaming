@@ -260,7 +260,7 @@ public class AACStream extends AudioStream {
 					e.printStackTrace();
 				}
 			}
-		});
+		}, TAG);
 
 		mThread.start();
 

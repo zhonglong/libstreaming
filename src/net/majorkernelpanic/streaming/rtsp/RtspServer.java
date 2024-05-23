@@ -33,6 +33,7 @@ import java.util.Locale;
 import java.util.WeakHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import net.majorkernelpanic.streaming.MediaStream;
 import net.majorkernelpanic.streaming.Session;
 import net.majorkernelpanic.streaming.SessionBuilder;
 import android.app.Service;
@@ -86,6 +87,7 @@ public class RtspServer extends Service {
 	protected SharedPreferences mSharedPreferences;
 	protected boolean mEnabled = true;	
 	protected int mPort = DEFAULT_RTSP_PORT;
+	protected WeakHashMap<Session,Object> mSessions = new WeakHashMap<>(2);
 	protected Session sSession;	
 	
 	private RequestListener mListenerThread;
@@ -97,6 +99,7 @@ public class RtspServer extends Service {
     private String mUsername;
     private String mPassword;
 	
+	private int mTransport;
 
 	public RtspServer() {
 	}
@@ -171,7 +174,9 @@ public class RtspServer extends Service {
 		if (!mEnabled || mRestart) stop();
 		if (mEnabled && mListenerThread == null) {
 			try {
-				sessionStart();
+				if (mTransport == MediaStream.TRANSPORT_MULTICAST) {
+					multicastStart();
+				}
 				mListenerThread = new RequestListener();
 			} catch (Exception e) {
 				mListenerThread = null;
@@ -188,7 +193,14 @@ public class RtspServer extends Service {
 		if (mListenerThread != null) {
 			try {
 				mListenerThread.kill();
-				sessionStop();
+				if (mTransport == MediaStream.TRANSPORT_MULTICAST) {
+					multicastStop();
+				}
+				for ( Session session : mSessions.keySet() ) {
+				    if ( session != null && session.isStreaming() ) {
+						session.stop();
+				    } 
+				}
 			} catch (Exception e) {
 			} finally {
 				mListenerThread = null;
@@ -196,6 +208,31 @@ public class RtspServer extends Service {
 		}
 	}
 
+	/** Returns whether or not the RTSP server is streaming to some client(s). */
+	public boolean isStreaming() {
+		for ( Session session : mSessions.keySet() ) {
+		    if ( session != null && session.isStreaming() ) {
+		    	return true;
+		    } 
+		}
+		return false;
+	}
+	
+	public boolean isEnabled() {
+		return mEnabled;
+	}
+
+	/** Returns the bandwidth consumed by the RTSP server in bits per second. */
+	public long getBitrate() {
+		long bitrate = 0;
+		for ( Session session : mSessions.keySet() ) {
+		    if ( session != null && session.isStreaming() ) {
+		    	bitrate += session.getBitrate();
+		    } 
+		}
+		return bitrate;
+	}
+	
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
 		return START_STICKY;
@@ -208,6 +245,7 @@ public class RtspServer extends Service {
 		mSharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
 		mPort = Integer.parseInt(mSharedPreferences.getString(KEY_PORT, String.valueOf(mPort)));
 		mEnabled = mSharedPreferences.getBoolean(KEY_ENABLED, mEnabled);
+		mTransport = Integer.parseInt(mSharedPreferences.getString("transport", "2"));
 
 		// If the configuration is modified, the server will adjust
 		mSharedPreferences.registerOnSharedPreferenceChangeListener(mOnSharedPreferenceChangeListener);
@@ -280,11 +318,14 @@ public class RtspServer extends Service {
 	 * @return A proper session
 	 */
 	protected Session handleRequest(String uri, Socket client) throws IllegalStateException, IOException {
-		Session session = sSession;
-		session.setOrigin(client.getLocalAddress().getHostAddress());
-		if (session.getDestination()==null) {
+		Session session;
+		if (mTransport == MediaStream.TRANSPORT_MULTICAST) {
+			session = sSession;
+		} else {
+			session = UriParser.parse(uri);
 			session.setDestination(client.getInetAddress().getHostAddress());
 		}
+		session.setOrigin(client.getLocalAddress().getHostAddress());
 		return session;
 	}
 	
@@ -394,6 +435,16 @@ public class RtspServer extends Service {
 
 			}
 
+			if (mTransport == MediaStream.TRANSPORT_UDP || mTransport == MediaStream.TRANSPORT_TCP) {
+				// Streaming stops when client disconnects
+				boolean streaming = isStreaming();
+				mSession.syncStop();
+				if (streaming && !isStreaming()) {
+					postMessage(MESSAGE_STREAMING_STOPPED);
+				}
+				mSession.release();
+			}
+
 			try {
 				mClient.close();
 			} catch (IOException ignore) {}
@@ -420,6 +471,10 @@ public class RtspServer extends Service {
 
                     // Parse the requested URI and configure the session
                     mSession = handleRequest(request.uri, mClient);
+                    if (mTransport == MediaStream.TRANSPORT_UDP || mTransport == MediaStream.TRANSPORT_TCP) {
+                        mSessions.put(mSession, null);
+                        mSession.syncConfigure();
+                    }
 
                     String requestContent = mSession.getSessionDescription();
                     String requestAttributes =
@@ -467,20 +522,68 @@ public class RtspServer extends Service {
                         return response;
                     }
 
-					int[] ports = mSession.getTrack(trackId).getDestinationPorts();
-					p1 = ports[0];
-					p2 = ports[1];
+                    p = Pattern.compile("client_port=(\\d+)(?:-(\\d+))?", Pattern.CASE_INSENSITIVE);
+                    m = p.matcher(request.headers.get("transport"));
+
+                    if (!m.find() || mTransport == MediaStream.TRANSPORT_MULTICAST) {
+                        int[] ports = mSession.getTrack(trackId).getDestinationPorts();
+                        p1 = ports[0];
+                        p2 = ports[1];
+                    } else {
+                        p1 = Integer.parseInt(m.group(1));
+                        if (m.group(2) == null) {
+                            p2 = p1+1;
+                        } else {
+                            p2 = Integer.parseInt(m.group(2));
+                        }
+                    }
 
                     ssrc = mSession.getTrack(trackId).getSSRC();
                     src = mSession.getTrack(trackId).getLocalPorts();
                     destination = mSession.getDestination();
 
-                    mSession.syncPlay(trackId);
+                    switch (mTransport) {
+                        case MediaStream.TRANSPORT_UDP:
+                            mSession.getTrack(trackId).setDestinationPorts(p1, p2);
+                            break;
+                        case MediaStream.TRANSPORT_TCP:
+                            byte channelIdentifier = (trackId == 1) ? (byte) 0x00 : (byte) 0x02;
+                            mSession.getTrack(trackId).setOutputStream(mOutput, channelIdentifier);
+                            break;
+                        default:
+                            mSession.syncPlay(trackId);
+                            break;
+                    }
+
+                    if (mTransport == MediaStream.TRANSPORT_UDP || mTransport == MediaStream.TRANSPORT_TCP) {
+                        boolean streaming = isStreaming();
+                        mSession.syncStart(trackId);
+                        if (!streaming && isStreaming()) {
+                            postMessage(MESSAGE_STREAMING_STARTED);
+                        }
+                    }
 
                     // See: https://github.com/iamscottxu/obs-rtspserver/blob/master/rtsp-server/xop/RtspMessage.cpp
-                    response.attributes = "Transport: RTP/AVP/UDP;" + (InetAddress.getByName(destination).isMulticastAddress() ? "multicast" : "unicast") +
-                            ";destination=" + mSession.getDestination() +
-							";port="+p1+"-"+p2+
+                    String transport;
+                    switch (mTransport) {
+                        case MediaStream.TRANSPORT_UDP:
+                            transport = "Transport: RTP/AVP/UDP;unicast" +
+                                    ";destination=" + mSession.getDestination() +
+                                    ";client_port=" + p1 + "-" + p2 +
+                                    ";server_port=" + src[0] + "-" + src[1];
+                            break;
+                        case MediaStream.TRANSPORT_TCP:
+                            transport = "Transport: RTP/AVP/TCP;unicast" +
+                                    ";interleaved=" + (trackId == 1 ? "0-1" : "2-3") +
+                                    ";destination=" + mSession.getDestination();
+                            break;
+                        default:
+                            transport = "Transport: RTP/AVP/UDP;" + (InetAddress.getByName(destination).isMulticastAddress() ? "multicast" : "unicast") +
+                                    ";destination=" + mSession.getDestination() +
+                                    ";port="+p1+"-"+p2;
+                            break;
+                    }
+                    response.attributes = transport +
                             ";ssrc=" + Integer.toHexString(ssrc) +
                             ";mode=play\r\n" +
                             "Session: " + "1185d20035702ca" + "\r\n" +
@@ -647,7 +750,7 @@ public class RtspServer extends Service {
 		}
 	}
 
-	private void sessionStart() throws IllegalStateException, IOException {
+	private void multicastStart() throws IllegalStateException, IOException {
 		if (sSession == null) {
 			sSession = SessionBuilder.getInstance().build();
 			sSession.syncConfigure();
@@ -655,7 +758,7 @@ public class RtspServer extends Service {
 		}
 	}
 
-	private void sessionStop() {
+	private void multicastStop() {
 		if (sSession != null) {
 			sSession.syncStop();
 			sSession.release();

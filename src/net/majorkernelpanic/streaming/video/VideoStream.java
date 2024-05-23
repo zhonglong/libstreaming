@@ -48,6 +48,7 @@ import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
 import android.media.MediaRecorder;
 import android.media.projection.MediaProjection;
+import android.media.projection.gl.EGLRender;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -92,6 +93,7 @@ public abstract class VideoStream extends MediaStream {
 	protected int mMaxFps = 0;	
 
 	protected MediaProjection mMediaProjection;
+	private EGLRender mGLRender;
 
 	/** 
 	 * Don't use this class directly.
@@ -293,10 +295,16 @@ public abstract class VideoStream extends MediaStream {
 		MediaFormat mediaFormat = MediaFormat.createVideoFormat("video/avc", mQuality.resX, mQuality.resY);
 		mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, mQuality.bitrate);
 		mediaFormat.setInteger(MediaFormat.KEY_FRAME_RATE, mQuality.framerate);
-		mediaFormat.setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, mQuality.framerate);
 		mediaFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
-		mediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 10);
 		mediaFormat.setInteger(MediaFormat.KEY_PREPEND_HEADER_TO_SYNC_FRAMES, 1);
+		if (mSettings != null && Integer.parseInt(mSettings.getString("transport", "2")) == TRANSPORT_TCP) {
+			mediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 10);
+			mediaFormat.setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 100_000);
+		} else {
+			mediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 3);
+		}
+		// TODO: RK3588
+//		mediaFormat.setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, mQuality.framerate);
 		mMediaCodec.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
 		mSurface = mMediaCodec.createInputSurface();
 		mMediaCodec.start();
@@ -332,11 +340,17 @@ public abstract class VideoStream extends MediaStream {
 					mCamera = virtualDisplay;
 					break;
 				case 1:
+				case 2:
+					boolean egl = (videoSource == 2);
+					if (egl) {
+						mGLRender = new EGLRender(mSurface, mQuality.resX, mQuality.resY, mQuality.framerate);
+					}
+
 					boolean secure = Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Build.VERSION.SDK_INT == Build.VERSION_CODES.R && "S" != Build.VERSION.CODENAME;
 					IBinder displayBinder = SurfaceControl.createDisplay(TAG + "-display", secure);
 					try {
 						SurfaceControl.openTransaction();
-						SurfaceControl.setDisplaySurface(displayBinder, mSurface);
+						SurfaceControl.setDisplaySurface(displayBinder, egl ? mGLRender.getDecodeSurface() : mSurface);
 						DisplayInfo d = DisplayManagerGlobal.getInstance().getDisplayInfo(0);
 						SurfaceControl.setDisplayProjection(displayBinder, 0, new Rect(0, 0, d.logicalWidth, d.logicalHeight), new Rect(0, 0, mQuality.resX, mQuality.resY));
 						SurfaceControl.setDisplayLayerStack(displayBinder, d.layerStack);
@@ -344,6 +358,10 @@ public abstract class VideoStream extends MediaStream {
 						SurfaceControl.closeTransaction();
 					}
 					mCamera = displayBinder;
+
+					if (egl) {
+						mGLRender.start();
+					}
 					break;
 			}
 		}
@@ -356,6 +374,10 @@ public abstract class VideoStream extends MediaStream {
 				virtualDisplay.release();
 			}
 			if (mCamera instanceof IBinder) {
+				if (mGLRender != null) {
+					mGLRender.stop();
+					mGLRender = null;
+				}
 				IBinder displayBinder = (IBinder) mCamera;
 				SurfaceControl.destroyDisplay(displayBinder);
 			}

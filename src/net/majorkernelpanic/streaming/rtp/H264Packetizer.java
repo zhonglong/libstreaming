@@ -53,7 +53,7 @@ public class H264Packetizer extends AbstractPacketizer implements Runnable {
 
 	public void start() {
 		if (t == null) {
-			t = new Thread(this);
+			t = new Thread(this, TAG);
 			t.start();
 		}
 	}

@@ -43,6 +43,10 @@ public abstract class MediaStream implements Stream {
 
 	protected static final String TAG = "MediaStream";
 	
+	public final static int TRANSPORT_UDP = 0;
+	public final static int TRANSPORT_TCP = 1;
+	public final static int TRANSPORT_MULTICAST = 2;
+
 	/** Raw audio/video will be encoded using the MediaRecorder API. */
 	public static final byte MODE_MEDIARECORDER_API = 0x01;
 

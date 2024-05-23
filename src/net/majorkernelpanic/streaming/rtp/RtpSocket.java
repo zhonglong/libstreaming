@@ -46,7 +46,7 @@ public class RtpSocket implements Runnable {
 	public final static int TRANSPORT_TCP = 0x01;	
 	
 	public static final int RTP_HEADER_LENGTH = 12;
-	public static final int MTU = 1300;
+	public static final int MTU = 1500;
 
 	private MulticastSocket mSocket;
 	private DatagramPacket[] mPackets;
@@ -112,6 +112,7 @@ public class RtpSocket implements Runnable {
 
 		try {
 		mSocket = new MulticastSocket();
+		Log.d(TAG, "getSendBufferSize -> " + mSocket.getSendBufferSize());
 		} catch (Exception e) {
 			throw new RuntimeException(e.getMessage());
 		}
@@ -217,7 +218,7 @@ public class RtpSocket implements Runnable {
 	public void commitBuffer() throws IOException {
 
 		if (mThread == null) {
-			mThread = new Thread(this);
+			mThread = new Thread(this, TAG);
 			mThread.start();
 		}
 		
@@ -237,7 +238,7 @@ public class RtpSocket implements Runnable {
 		mBufferCommitted.release();
 
 		if (mThread == null) {
-			mThread = new Thread(this);
+			mThread = new Thread(this, TAG);
 			mThread.start();
 		}		
 		
