@@ -11,6 +11,16 @@
             android:defaultValue="false"
             android:key="tuio"
             android:title="TUIO" />
+
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="video_mute"
+            android:title="Mute Video" />
+
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="audio_mute"
+            android:title="Mute Audio" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="Settings">
@@ -21,11 +31,6 @@
             android:entryValues="@array/video_value"
             android:key="video"
             android:title="@string/video_title" />
-
-        <SwitchPreference
-            android:defaultValue="false"
-            android:key="uhd"
-            android:title="4K@60" />
 
         <EditTextPreference
             android:defaultValue=""
@@ -47,5 +52,10 @@
             android:entryValues="@array/transport_value"
             android:key="transport"
             android:title="@string/transport_title" />
+
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="sleep"
+            android:title="RTP/UDP usleep" />
     </PreferenceCategory>
 </PreferenceScreen>

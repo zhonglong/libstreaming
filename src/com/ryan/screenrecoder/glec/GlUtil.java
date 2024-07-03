@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package android.media.projection.gl;
+package com.ryan.screenrecoder.glec;
 
 import android.opengl.GLES20;
 import android.opengl.GLES30;

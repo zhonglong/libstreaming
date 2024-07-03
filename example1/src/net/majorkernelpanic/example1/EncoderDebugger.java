@@ -2,6 +2,7 @@ package net.majorkernelpanic.example1;
 
 import android.media.MediaCodecInfo;
 import android.media.MediaCodecList;
+import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -44,6 +45,12 @@ public class EncoderDebugger {
                 }
             }
         }
+
+        long t = SystemClock.elapsedRealtimeNanos();
+        try {
+            Thread.sleep(0, 1000);
+        } catch (InterruptedException e) {}
+        Log.d(TAG, "usleep 1000 -> " + (SystemClock.elapsedRealtimeNanos() - t) + " ns");
     }
 
 }

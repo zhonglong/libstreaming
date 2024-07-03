@@ -20,6 +20,7 @@ package net.majorkernelpanic.streaming.rtp;
 
 import java.io.IOException;
 import android.annotation.SuppressLint;
+import android.media.MediaCodec;
 import android.util.Log;
 
 /**
@@ -185,7 +186,8 @@ public class H264Packetizer extends AbstractPacketizer implements Runnable {
 
 		// We send two packets containing NALU type 7 (SPS) and 8 (PPS)
 		// Those should allow the H264 stream to be decoded even if no SDP was sent to the decoder.
-		if (type == 5 && sps != null && pps != null) {
+		boolean keyFrame = (((MediaCodecInputStream)is).getLastBufferInfo().flags & MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0;
+		if ((type == 5 || keyFrame) && sps != null && pps != null) {
 			Log.v(TAG,"SPS and PPS prepend to sync frame in the stream.");
 			buffer = socket.requestBuffer();
 			socket.markNextPacket();

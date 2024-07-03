@@ -24,6 +24,7 @@ import java.io.RandomAccessFile;
 import java.lang.reflect.Field;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import net.majorkernelpanic.streaming.SessionBuilder;
 import net.majorkernelpanic.streaming.rtp.AACADTSPacketizer;
 import net.majorkernelpanic.streaming.rtp.AACLATMPacketizer;
@@ -242,15 +243,20 @@ public class AACStream extends AudioStream {
 			@Override
 			public void run() {
 				int len = 0, bufferIndex = 0;
+				byte[] buffer = new byte[bufferSize];
 				try {
 					while (!Thread.interrupted()) {
 						bufferIndex = mMediaCodec.dequeueInputBuffer(10000);
 						if (bufferIndex>=0) {
 							inputBuffers[bufferIndex].clear();
-							len = mAudioRecord.read(inputBuffers[bufferIndex], bufferSize);
+							len = mAudioRecord.read(buffer, 0, bufferSize);
 							if (len ==  AudioRecord.ERROR_INVALID_OPERATION || len == AudioRecord.ERROR_BAD_VALUE) {
 								Log.e(TAG,"An error occured with the AudioRecord API !");
 							} else {
+								if (mSettings != null && mSettings.getBoolean("audio_mute", false)) {
+									Arrays.fill(buffer, 0, len, (byte) 0);
+								}
+								inputBuffers[bufferIndex].put(buffer, 0, len);
 								//Log.v(TAG,"Pushing raw audio to the decoder: len="+len+" bs: "+inputBuffers[bufferIndex].capacity());
 								mMediaCodec.queueInputBuffer(bufferIndex, 0, len, System.nanoTime()/1000, 0);
 							}

@@ -551,7 +551,6 @@ public class RtspServer extends Service {
                             mSession.getTrack(trackId).setOutputStream(mOutput, channelIdentifier);
                             break;
                         default:
-                            mSession.syncPlay(trackId);
                             break;
                     }
 

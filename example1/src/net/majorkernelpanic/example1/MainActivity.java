@@ -34,6 +34,7 @@ public class MainActivity extends PreferenceActivity implements SharedPreference
     private final static String KEY_VIDEO = "video";
     private final static String KEY_AUDIO = "audio";
     private final static String KEY_TRANSPORT = "transport";
+    private final static String KEY_QUALITY = "quality";
     private final static boolean MULTICAST_DEBUG = false;
 
     private Context mContext;
@@ -79,7 +80,7 @@ public class MainActivity extends PreferenceActivity implements SharedPreference
         mContext = getApplicationContext();
 
         // Sets the port of the RTSP server to 1234
-        // ffplay -rtsp_transport udp_multicast -fflags nobuffer -flags low_delay -sync video -i rtsp://192.168.100.39:8554/live
+        // ffplay -fs -rtsp_transport udp_multicast -fflags nobuffer -flags low_delay -sync video -i rtsp://192.168.100.39:8554/live
         // vlc --network-caching=40 rtsp://192.168.100.39:8554/live
         mPref = PreferenceManager.getDefaultSharedPreferences(this);
         mPref.registerOnSharedPreferenceChangeListener(this);
@@ -88,13 +89,15 @@ public class MainActivity extends PreferenceActivity implements SharedPreference
         editor.commit();
 
         boolean audio = !TextUtils.equals(mPref.getString(KEY_AUDIO, "0"), "-1");
+        String quality = mPref.getString(KEY_QUALITY, "");
         // Configures the SessionBuilder
         SessionBuilder.getInstance()
                 .setContext(getApplicationContext())
                 .setMediaProjection(getMediaProjection())
                 .setCallback(mCallback)
                 .setAudioEncoder(audio ? SessionBuilder.AUDIO_AAC : SessionBuilder.AUDIO_NONE)
-                .setVideoEncoder(SessionBuilder.VIDEO_H264);
+                .setVideoEncoder(SessionBuilder.VIDEO_H264)
+                .setVideoQuality(TextUtils.isEmpty(quality) ? VideoQuality.DEFAULT_VIDEO_QUALITY : VideoQuality.parseQuality(quality));
 
         // Starts the RTSP server
         if (mPref.getBoolean(KEY_RTSP, false)) {
@@ -160,11 +163,12 @@ public class MainActivity extends PreferenceActivity implements SharedPreference
             case KEY_TRANSPORT:
                 mTransport.setSummary(mTransport.getEntry());
                 break;
-            default:
-                VideoQuality vq = mPref.getBoolean("uhd", false) ? VideoQuality.UHD_VIDEO_QUALITY : VideoQuality.DEFAULT_VIDEO_QUALITY;
-                final String quality = mPref.getString("quality", "");
-                if (!TextUtils.isEmpty(quality)) vq = VideoQuality.parseQuality(quality);
-                SessionBuilder.getInstance().setVideoQuality(vq);
+            case KEY_QUALITY:
+                final String quality = mPref.getString(KEY_QUALITY, "");
+                if (!TextUtils.isEmpty(quality)) {
+                    VideoQuality vq = VideoQuality.parseQuality(quality);
+                    SessionBuilder.getInstance().setVideoQuality(vq);
+                }
                 break;
         }
     }

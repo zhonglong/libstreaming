@@ -1,5 +1,6 @@
-package android.media.projection.gl;
+package com.ryan.screenrecoder.glec;
 
+import android.content.SharedPreferences;
 import android.graphics.SurfaceTexture;
 import android.opengl.EGL14;
 import android.opengl.EGLConfig;
@@ -32,14 +33,19 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
 
     private Surface decodeSurface;
 
-    private final int mWidth;
-    private final int mHeight;
+    private int mWidth;
+    private int mHeight;
     private int fps;
-    private float video_interval;
+    private int video_interval;
     private boolean mFrameAvailable = true;
 
     private volatile boolean start;
+    private long time = 0;
+    private long current_time;
+
     private volatile boolean isReady = false;//数据是否准备就绪，当第一帧数据到达时即可视为就绪
+
+    private SharedPreferences mSettings;
 
     public EGLRender(Surface surface, int mWidth, int mHeight, int fps) {
         this.mWidth = mWidth;
@@ -50,9 +56,13 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
         setup();
     }
 
+    public void setPreferences(SharedPreferences prefs) {
+        mSettings = prefs;
+    }
+
     private void initFPs(int fps) {
         this.fps = fps;
-        video_interval = 1000f / fps;
+        video_interval = 1000 / fps;
     }
 
     /**
@@ -227,70 +237,49 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
         return result;
     }
 
+    private int count = 1;
+
     @Override
     public void onFrameAvailable(SurfaceTexture surfaceTexture) {
         isReady = true;
         mFrameAvailable = true;
     }
 
+    private long computePresentationTimeNsec(int frameIndex) {
+        final long ONE_BILLION = 1000000000;
+        return frameIndex * ONE_BILLION / fps;
+    }
+
     public void drawImage() {
-        mTextureRender.drawFrame();
+        if (mSettings != null && mSettings.getBoolean("video_mute", false)) {
+            mTextureRender.drawBlankScreen();
+        } else {
+            mTextureRender.drawFrame();
+        }
     }
-    public long bootTime() {
-        long bootTime = SystemClock.elapsedRealtimeNanos();
-        return bootTime;
-    }
+
     /**
      * 开始录屏
      */
     public void start() {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                start = true;
-                makeCurrent(1);
-                //数据尚未准备就绪时，无需处理画面
-                while (!isReady){
-                    try {
-                            Thread.sleep((long) video_interval);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                }
-                long frameCount = 0;
-                long startTimeMillis = bootTime()/1000000;
-                int f = 0;
-                long s = startTimeMillis / 1000;
-                while (start) {
-                    long bootTime = bootTime();
-                    long currentTimeMillis = bootTime/1000000;
-                    if (currentTimeMillis / 1000 == s) {
-                        f++;
-                    } else {
-                        if (fps - f > 1) Log.d(TAG, "!!! " + f);
-                        f = 0;
-                        s = currentTimeMillis / 1000;
-                    }
-                    long dstTimeMillis = (long) (frameCount * video_interval + startTimeMillis);
-                    if (currentTimeMillis >= dstTimeMillis) {
-                        awaitNewImage();
-                        drawImage();
-                        setPresentationTime(bootTime);
-                        swapBuffers();
-                        frameCount ++;
-                    } else {
-                        try {
-                            Thread.sleep(dstTimeMillis-currentTimeMillis);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                    }
-
+        new Thread(() -> {
+            start = true;
+            makeCurrent(1);
+            while (start) {
+                awaitNewImage();
+                current_time = System.currentTimeMillis();
+                if (current_time - time >= video_interval) {
+                    //todo 帧率控制
+                    drawImage();
+                    setPresentationTime(computePresentationTimeNsec(count++));
+                    swapBuffers();
+                    time = current_time;
+                } else {
+                    SystemClock.sleep(video_interval - (current_time - time));
                 }
             }
         }, TAG).start();
     }
-
 
     public void stop() {
         start = false;

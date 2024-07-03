@@ -67,6 +67,7 @@ public class RtpSocket implements Runnable {
 	private int mCount = 0;
 	private byte mTcpHeader[];
 	protected OutputStream mOutputStream = null;
+	private boolean mUdpSleep;
 	
 	private AverageBitrate mAverageBitrate;
 
@@ -268,6 +269,10 @@ public class RtpSocket implements Runnable {
 		mBuffers[mBufferIn][1] |= 0x80;
 	}
 
+	public void setUdpSleep(boolean sleep) {
+		mUdpSleep = sleep;
+	}
+
 	/** The Thread sends the packets in the FIFO one by one at a constant rate. */
 	@Override
 	public void run() {
@@ -300,6 +305,7 @@ public class RtpSocket implements Runnable {
 				if (mCount++>30) {
 					if (mTransport == TRANSPORT_UDP) {
 						mSocket.send(mPackets[mBufferOut]);
+						if (mUdpSleep) Thread.sleep(0, 1000);
 					} else {
 						sendTCP();
 					}

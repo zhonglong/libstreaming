@@ -48,7 +48,6 @@ import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
 import android.media.MediaRecorder;
 import android.media.projection.MediaProjection;
-import android.media.projection.gl.EGLRender;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -60,6 +59,8 @@ import android.view.Surface;
 import android.view.SurfaceControl;
 import android.view.SurfaceHolder;
 import android.view.SurfaceHolder.Callback;
+
+import com.ryan.screenrecoder.glec.EGLRender;
 
 /** 
  * Don't use this class directly.
@@ -296,7 +297,6 @@ public abstract class VideoStream extends MediaStream {
 		mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, mQuality.bitrate);
 		mediaFormat.setInteger(MediaFormat.KEY_FRAME_RATE, mQuality.framerate);
 		mediaFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
-		mediaFormat.setInteger(MediaFormat.KEY_PREPEND_HEADER_TO_SYNC_FRAMES, 1);
 		if (mSettings != null && Integer.parseInt(mSettings.getString("transport", "2")) == TRANSPORT_TCP) {
 			mediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 10);
 			mediaFormat.setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 100_000);
@@ -316,6 +316,7 @@ public abstract class VideoStream extends MediaStream {
 		final MediaCodecInputStream inputStream = new MediaCodecInputStream(mMediaCodec);
 		inputStream.setMediaFormatCallback((sps, pps) -> reconfigure(sps, pps));
 		mPacketizer.setInputStream(inputStream);
+		mPacketizer.getRtpSocket().setUdpSleep(mSettings != null && mSettings.getBoolean("sleep", false));
 		mPacketizer.start();
 
 		mStreaming = true;
@@ -334,8 +335,9 @@ public abstract class VideoStream extends MediaStream {
 			int videoSource = mSettings != null ? Integer.parseInt(mSettings.getString("video", "0")) : 0;
 			switch (videoSource) {
 				case 0:
+					int dpi = mQuality.resY / 720;
 					VirtualDisplay virtualDisplay = mMediaProjection.createVirtualDisplay(TAG + "-display",
-							mQuality.resX, mQuality.resY, 1, DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC,
+							mQuality.resX, mQuality.resY, dpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC,
 							mSurface, null, null);
 					mCamera = virtualDisplay;
 					break;
@@ -344,6 +346,7 @@ public abstract class VideoStream extends MediaStream {
 					boolean egl = (videoSource == 2);
 					if (egl) {
 						mGLRender = new EGLRender(mSurface, mQuality.resX, mQuality.resY, mQuality.framerate);
+						mGLRender.setPreferences(mSettings);
 					}
 
 					boolean secure = Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Build.VERSION.SDK_INT == Build.VERSION_CODES.R && "S" != Build.VERSION.CODENAME;

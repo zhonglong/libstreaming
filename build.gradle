@@ -9,8 +9,8 @@ android {
     }
     sourceSets {
         main {
-            java.srcDirs = ['src']
-            res.srcDirs = ['res']
+            java.srcDirs = ['src', 'example1/src']
+            res.srcDirs = ['example1/res']
             manifest.srcFile 'AndroidManifest.xml'
         }
     }

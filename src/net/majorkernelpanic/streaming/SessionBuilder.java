@@ -169,10 +169,6 @@ public class SessionBuilder {
 	 **/
 	public SessionBuilder setContext(Context context) {
 		mContext = context;
-		SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(mContext);
-		mVideoQuality = sp.getBoolean("uhd", false) ? VideoQuality.UHD_VIDEO_QUALITY : VideoQuality.DEFAULT_VIDEO_QUALITY;
-		final String quality = sp.getString("quality", "");
-		if (!TextUtils.isEmpty(quality)) mVideoQuality = VideoQuality.parseQuality(quality);
 		return this;
 	}
 
