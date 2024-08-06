@@ -8,6 +8,7 @@ import android.opengl.EGLContext;
 import android.opengl.EGLDisplay;
 import android.opengl.EGLExt;
 import android.opengl.EGLSurface;
+import android.os.ConditionVariable;
 import android.os.SystemClock;
 import android.util.Log;
 import android.view.Surface;
@@ -37,15 +38,14 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
     private int mHeight;
     private int fps;
     private int video_interval;
-    private boolean mFrameAvailable = true;
+    private volatile boolean mFrameAvailable = false;
 
     private volatile boolean start;
     private long time = 0;
     private long current_time;
 
-    private volatile boolean isReady = false;//数据是否准备就绪，当第一帧数据到达时即可视为就绪
-
     private SharedPreferences mSettings;
+    private ConditionVariable mWaiter = new ConditionVariable();
 
     public EGLRender(Surface surface, int mWidth, int mHeight, int fps) {
         this.mWidth = mWidth;
@@ -241,13 +241,13 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
 
     @Override
     public void onFrameAvailable(SurfaceTexture surfaceTexture) {
-        isReady = true;
         mFrameAvailable = true;
     }
 
     private long computePresentationTimeNsec(int frameIndex) {
-        final long ONE_BILLION = 1000000000;
-        return frameIndex * ONE_BILLION / fps;
+//        final long ONE_BILLION = 1000000000;
+//        return frameIndex * ONE_BILLION / fps;
+        return mSurfaceTexture.getTimestamp();
     }
 
     public void drawImage() {
@@ -264,6 +264,7 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
     public void start() {
         new Thread(() -> {
             start = true;
+            while (start && !mFrameAvailable) SystemClock.sleep(video_interval);
             makeCurrent(1);
             while (start) {
                 awaitNewImage();
@@ -278,11 +279,13 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
                     SystemClock.sleep(video_interval - (current_time - time));
                 }
             }
+            mWaiter.open();
         }, TAG).start();
     }
 
     public void stop() {
         start = false;
+        mWaiter.block(2 * video_interval);
         mSurfaceTexture.release();
         decodeSurface.release();
     }

@@ -240,6 +240,10 @@ public abstract class MediaStream implements Stream {
 		return !mStreaming ? 0 : mPacketizer.getRtpSocket().getBitrate(); 
 	}
 
+	public long getSentBytes() {
+		return !mStreaming ? 0 : mPacketizer.getRtpSocket().getSentBytes();
+	}
+
 	/**
 	 * Indicates if the {@link MediaStream} is streaming.
 	 * @return A boolean indicating if the {@link MediaStream} is streaming

@@ -136,7 +136,7 @@ public class Session {
 		 * Called periodically to inform you on the bandwidth 
 		 * consumption of the streams when streaming. 
 		 */
-		public void onBitrateUpdate(long bitrate);
+		public void onBitrateUpdate(long bitrate, long sentBytes);
 
 		/** Called when some error occurs. */
 		public void onSessionError(int reason, int streamType, Exception e);
@@ -333,6 +333,13 @@ public class Session {
 		return sum;
 	}
 
+	public long getSentBytes() {
+		long sum = 0;
+		if (mAudioStream != null) sum += mAudioStream.getSentBytes();
+		if (mVideoStream != null) sum += mVideoStream.getSentBytes();
+		return sum;
+	}
+
 	/** Indicates if a track is currently running. */
 	public boolean isStreaming() {
 		return (mAudioStream!=null && mAudioStream.isStreaming()) || (mVideoStream!=null && mVideoStream.isStreaming());
@@ -514,12 +521,6 @@ public class Session {
 		postSessionStopped();
 	}
 
-	public void syncPlay(int id) {
-		if (id == 1 && mVideoStream.isStreaming()) {
-			mHandler.postDelayed(() -> mVideoStream.requestKeyFrame(), 1492);
-		}
-	}
-
 	/**
 	 * Asynchronously starts the camera preview. <br />
 	 * You should of course pass a {@link SurfaceView} to {@link #setSurfaceView(SurfaceView)}
@@ -688,12 +689,12 @@ public class Session {
 		});
 	}	
 
-	private void postBitRate(final long bitrate) {
+	private void postBitRate(final long bitrate, final long sentBytes) {
 		mMainHandler.post(new Runnable() {
 			@Override
 			public void run() {
 				if (mCallback != null) {
-					mCallback.onBitrateUpdate(bitrate);
+					mCallback.onBitrateUpdate(bitrate, sentBytes);
 				}
 			}
 		});
@@ -703,10 +704,10 @@ public class Session {
 		@Override
 		public void run() {
 			if (isStreaming()) { 
-				postBitRate(getBitrate());
+				postBitRate(getBitrate(), getSentBytes());
 				mHandler.postDelayed(mUpdateBitrate, 1000);
 			} else {
-				postBitRate(0);
+				postBitRate(0, getSentBytes());
 			}
 		}
 	};

@@ -27,6 +27,7 @@ import net.majorkernelpanic.streaming.audio.AudioStream;
 import net.majorkernelpanic.streaming.gl.SurfaceView;
 import net.majorkernelpanic.streaming.video.H263Stream;
 import net.majorkernelpanic.streaming.video.H264Stream;
+import net.majorkernelpanic.streaming.video.H265Stream;
 import net.majorkernelpanic.streaming.video.VideoQuality;
 import net.majorkernelpanic.streaming.video.VideoStream;
 import android.content.Context;
@@ -51,6 +52,8 @@ public class SessionBuilder {
 
 	/** Can be used with {@link #setVideoEncoder}. */
 	public final static int VIDEO_H263 = 2;
+
+	public final static int VIDEO_H265 = 3;
 
 	/** Can be used with {@link #setAudioEncoder}. */
 	public final static int AUDIO_NONE = 0;
@@ -141,6 +144,12 @@ public class SessionBuilder {
 				stream.setPreferences(PreferenceManager.getDefaultSharedPreferences(mContext));
 			session.addVideoTrack(stream);
 			break;
+		case VIDEO_H265:
+			H265Stream hevc = new H265Stream(mCamera);
+			if (mContext!=null)
+				hevc.setPreferences(PreferenceManager.getDefaultSharedPreferences(mContext));
+			session.addVideoTrack(hevc);
+			break;
 		}
 
 		if (session.getVideoTrack()!=null) {
@@ -226,6 +235,10 @@ public class SessionBuilder {
 	public SessionBuilder setMediaProjection(MediaProjection projection) {
 		mMediaProjection = projection;
 		return this;
+	}
+
+	public MediaProjection getMediaProjection() {
+		return mMediaProjection;
 	}
 	
 	/** 

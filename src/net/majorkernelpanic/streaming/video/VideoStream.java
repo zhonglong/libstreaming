@@ -53,6 +53,7 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.DisplayInfo;
 import android.view.Surface;
@@ -226,7 +227,6 @@ public abstract class VideoStream extends MediaStream {
 	/** Stops the stream. */
 	public synchronized void stop() {
 		if (mCamera != null) {
-			super.stop();
 			// We need to restart the preview
 			if (!mCameraOpenedManually) {
 				destroyCamera();
@@ -237,6 +237,7 @@ public abstract class VideoStream extends MediaStream {
 					e.printStackTrace();
 				}
 			}
+			super.stop();
 		}
 	}
 
@@ -292,8 +293,8 @@ public abstract class VideoStream extends MediaStream {
 
 		Log.d(TAG,"Video encoded using the MediaCodec API with a surface");
 
-		mMediaCodec = MediaCodec.createEncoderByType("video/avc");
-		MediaFormat mediaFormat = MediaFormat.createVideoFormat("video/avc", mQuality.resX, mQuality.resY);
+		mMediaCodec = MediaCodec.createEncoderByType(mMimeType);
+		MediaFormat mediaFormat = MediaFormat.createVideoFormat(mMimeType, mQuality.resX, mQuality.resY);
 		mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, mQuality.bitrate);
 		mediaFormat.setInteger(MediaFormat.KEY_FRAME_RATE, mQuality.framerate);
 		mediaFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
@@ -303,8 +304,17 @@ public abstract class VideoStream extends MediaStream {
 		} else {
 			mediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 3);
 		}
-		// TODO: RK3588
-//		mediaFormat.setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, mQuality.framerate);
+		if (TextUtils.equals(mMimeType, MediaFormat.MIMETYPE_VIDEO_HEVC)) {
+			mediaFormat.setInteger(MediaFormat.KEY_PREPEND_HEADER_TO_SYNC_FRAMES, 1);
+		}
+		if (mSettings != null) {
+			switch (mSettings.getString("codec", "")) {
+				case "c2.rk.avc.encoder":
+					mediaFormat.setInteger(MediaFormat.KEY_MAX_BIT_RATE, mQuality.bitrate);
+					mediaFormat.setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, mQuality.framerate);
+					break;
+			}
+		}
 		mMediaCodec.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
 		mSurface = mMediaCodec.createInputSurface();
 		mMediaCodec.start();

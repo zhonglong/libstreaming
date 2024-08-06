@@ -250,6 +250,10 @@ public class RtpSocket implements Runnable {
 		return mAverageBitrate.average();
 	}
 
+	public long getSentBytes() {
+		return mAverageBitrate.sum();
+	}
+
 	/** Increments the sequence number. */
 	private void updateSequence() {
 		setLong(mBuffers[mBufferIn], ++mSeq, 2, 4);
@@ -345,15 +349,16 @@ public class RtpSocket implements Runnable {
 	 **/
 	protected static class AverageBitrate {
 
-		private final static long RESOLUTION = 200;
+		private final static long RESOLUTION = 50;
 		
 		private long mOldNow, mNow, mDelta;
 		private long[] mElapsed, mSum;
 		private int mCount, mIndex, mTotal;
 		private int mSize;
+		private long mBytes;
 		
 		public AverageBitrate() {
-			mSize = 8000/((int)RESOLUTION);
+			mSize = 1000/((int)RESOLUTION);
 			reset();
 		}
 		
@@ -378,6 +383,7 @@ public class RtpSocket implements Runnable {
 			if (mCount>0) {
 				mDelta += mNow - mOldNow;
 				mTotal += length;
+				mBytes += length;
 				if (mDelta>RESOLUTION) {
 					mSum[mIndex] = mTotal;
 					mTotal = 0;
@@ -391,16 +397,20 @@ public class RtpSocket implements Runnable {
 			mCount++;
 		}
 		
-		public int average() {
+		public long average() {
 			long delta = 0, sum = 0;
 			for (int i=0;i<mSize;i++) {
 				sum += mSum[i];
 				delta += mElapsed[i];
 			}
 			//Log.d(TAG, "Time elapsed: "+delta);
-			return (int) (delta>0?8000*sum/delta:0);
+			return (delta>0?1000*sum/delta:0);
 		}
 		
+		private long sum() {
+			return mBytes;
+		}
+
 	}
 	
 	/** Computes the proper rate at which packets are sent. */

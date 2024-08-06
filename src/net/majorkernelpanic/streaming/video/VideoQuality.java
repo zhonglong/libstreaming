@@ -95,6 +95,18 @@ public class VideoQuality {
 		return quality;
 	}
 
+	public String getQuality() {
+		StringBuilder sb = new StringBuilder();
+		sb.append(bitrate != 0 ? bitrate / 1000 : 4000);
+		sb.append("-");
+		sb.append(framerate != 0 ? framerate : 30);
+		sb.append("-");
+		sb.append(resX);
+		sb.append("-");
+		sb.append(resY);
+		return sb.toString();
+	}
+
 	public String toString() {
 		return resX+"x"+resY+" px, "+framerate+" fps, "+bitrate/1000+" kbps";
 	}

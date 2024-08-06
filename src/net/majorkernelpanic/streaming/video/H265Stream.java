@@ -27,7 +27,7 @@ import net.majorkernelpanic.streaming.exceptions.ConfNotSupportedException;
 import net.majorkernelpanic.streaming.exceptions.StorageUnavailableException;
 import net.majorkernelpanic.streaming.hw.EncoderDebugger;
 import net.majorkernelpanic.streaming.mp4.MP4Config;
-import net.majorkernelpanic.streaming.rtp.H264Packetizer;
+import net.majorkernelpanic.streaming.rtp.H265Packetizer;
 import android.annotation.SuppressLint;
 import android.content.SharedPreferences.Editor;
 import android.graphics.ImageFormat;
@@ -45,9 +45,9 @@ import android.util.Log;
  * to configure the stream. You can then call {@link #start()} to start the RTP stream.
  * Call {@link #stop()} to stop the stream.
  */
-public class H264Stream extends VideoStream {
+public class H265Stream extends VideoStream {
 
-	public final static String TAG = "H264Stream";
+	public final static String TAG = "H265Stream";
 
 	private Semaphore mLock = new Semaphore(0);
 	private MP4Config mConfig;
@@ -56,7 +56,7 @@ public class H264Stream extends VideoStream {
 	 * Constructs the H.264 stream.
 	 * Uses CAMERA_FACING_BACK by default.
 	 */
-	public H264Stream() {
+	public H265Stream() {
 		this(CameraInfo.CAMERA_FACING_BACK);
 	}
 
@@ -65,12 +65,12 @@ public class H264Stream extends VideoStream {
 	 * @param cameraId Can be either CameraInfo.CAMERA_FACING_BACK or CameraInfo.CAMERA_FACING_FRONT
 	 * @throws IOException
 	 */
-	public H264Stream(int cameraId) {
+	public H265Stream(int cameraId) {
 		super(cameraId);
-		mMimeType = "video/avc";
+		mMimeType = "video/hevc";
 		mCameraImageFormat = ImageFormat.NV21;
-		mVideoEncoder = MediaRecorder.VideoEncoder.H264;
-		mPacketizer = new H264Packetizer();
+		mVideoEncoder = MediaRecorder.VideoEncoder.HEVC;
+		mPacketizer = new H265Packetizer();
 	}
 
 	/**
@@ -79,8 +79,8 @@ public class H264Stream extends VideoStream {
 	public synchronized String getSessionDescription() throws IllegalStateException {
 		if (mConfig == null) throw new IllegalStateException("You need to call configure() first !");
 		return "m=video "+String.valueOf(getDestinationPorts()[0])+" RTP/AVP 96\r\n" +
-		"a=rtpmap:96 H264/90000\r\n" +
-		"a=fmtp:96 packetization-mode=1;profile-level-id="+mConfig.getProfileLevel()+";sprop-parameter-sets="+mConfig.getB64SPS()+","+mConfig.getB64PPS()+";\r\n";
+		"a=rtpmap:96 H265/90000\r\n" +
+		"a=fmtp:96 packetization-mode=1;sprop-sps="+mConfig.getB64SPS()+";sprop-pps"+mConfig.getB64PPS()+";sprop-vps"+mConfig.getB64VPS()+";\r\n";
 	}	
 
 	/**
@@ -90,9 +90,6 @@ public class H264Stream extends VideoStream {
 	public synchronized void start() throws IllegalStateException, IOException {
 		if (!mStreaming) {
 			configure();
-			byte[] pps = Base64.decode(mConfig.getB64PPS(), Base64.NO_WRAP);
-			byte[] sps = Base64.decode(mConfig.getB64SPS(), Base64.NO_WRAP);
-			((H264Packetizer)mPacketizer).setStreamParameters(pps, sps);
 			super.start();
 		}
 	}
@@ -105,18 +102,17 @@ public class H264Stream extends VideoStream {
 		super.configure();
 		mMode = mRequestedMode;
 		mQuality = mRequestedQuality.clone();
-		mConfig = testH264();
+		mConfig = testH265();
 	}
 	
 	protected void reconfigure(String sps, String pps) {
-		mConfig = new MP4Config(sps, pps);
-		((H264Packetizer)mPacketizer).setStreamParameters(Base64.decode(mConfig.getB64PPS(), Base64.NO_WRAP),
-				Base64.decode(mConfig.getB64SPS(), Base64.NO_WRAP));
+		String[] s = sps.split("-");
+		mConfig = new MP4Config(s[0], s[1], s[2]);
 
-		String key = PREF_PREFIX+"h264-mr-"+mRequestedQuality.framerate+","+mRequestedQuality.resX+","+mRequestedQuality.resY;
+		String key = PREF_PREFIX+"h265-mr-"+mRequestedQuality.framerate+","+mRequestedQuality.resX+","+mRequestedQuality.resY;
 		if (mSettings != null) {
 			Editor editor = mSettings.edit();
-			editor.putString(key, mConfig.getB64SPS()+","+mConfig.getB64PPS());
+			editor.putString(key, mConfig.getB64VPS()+","+mConfig.getB64SPS()+","+mConfig.getB64PPS());
 			editor.commit();
 		}
 	}
@@ -125,14 +121,14 @@ public class H264Stream extends VideoStream {
 	 * Tests if streaming with the given configuration (bit rate, frame rate, resolution) is possible 
 	 * and determines the pps and sps. Should not be called by the UI thread.
 	 **/
-	private MP4Config testH264() throws IllegalStateException, IOException {
-		String key = PREF_PREFIX+"h264-mr-"+mRequestedQuality.framerate+","+mRequestedQuality.resX+","+mRequestedQuality.resY;
+	private MP4Config testH265() throws IllegalStateException, IOException {
+		String key = PREF_PREFIX+"h265-mr-"+mRequestedQuality.framerate+","+mRequestedQuality.resX+","+mRequestedQuality.resY;
 
 		if (mSettings != null && mSettings.contains(key) ) {
 			String[] s = mSettings.getString(key, "").split(",");
-			return new MP4Config(s[0],s[1]);
+			return new MP4Config(s[0],s[1],s[2]);
 		}
-		return new MP4Config("","");
+		return new MP4Config("","", "");
 	}
 
 }

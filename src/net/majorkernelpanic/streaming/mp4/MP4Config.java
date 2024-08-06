@@ -20,6 +20,8 @@ package net.majorkernelpanic.streaming.mp4;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+
+import android.text.TextUtils;
 import android.util.Base64;
 import android.util.Log;
 
@@ -31,18 +33,20 @@ public class MP4Config {
 	public final static String TAG = "MP4Config";
 	
 	private MP4Parser mp4Parser;
-	private String mProfilLevel, mPPS, mSPS;
+	private String mProfilLevel, mPPS, mSPS, mVPS;
 
-	public MP4Config(String profil, String sps, String pps) {
-		mProfilLevel = profil; 
-		mPPS = pps; 
+	public MP4Config(String vps, String sps, String pps) {
+		mVPS = vps;
+		mPPS = pps;
 		mSPS = sps;
 	}
 
 	public MP4Config(String sps, String pps) {
 		mPPS = pps;
 		mSPS = sps;
-		mProfilLevel = MP4Parser.toHexString(Base64.decode(sps, Base64.NO_WRAP),1,3);
+		if (!TextUtils.isEmpty(sps)) {
+			mProfilLevel = MP4Parser.toHexString(Base64.decode(sps, Base64.NO_WRAP), 1, 3);
+		}
 	}	
 	
 	public MP4Config(byte[] sps, byte[] pps) {
@@ -90,6 +94,11 @@ public class MP4Config {
 	public String getB64SPS() {
 		Log.d(TAG, "SPS: "+mSPS);
 		return mSPS;
+	}
+
+	public String getB64VPS() {
+		Log.d(TAG, "VPS: "+mVPS);
+		return mVPS;
 	}
 
 }

@@ -21,6 +21,11 @@
             android:defaultValue="false"
             android:key="audio_mute"
             android:title="Mute Audio" />
+
+        <SwitchPreference
+            android:defaultValue="false"
+            android:key="preview"
+            android:title="Preview" />
     </PreferenceCategory>
 
     <PreferenceCategory android:title="Settings">

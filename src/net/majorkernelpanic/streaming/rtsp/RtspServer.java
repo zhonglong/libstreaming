@@ -24,6 +24,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.BindException;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
@@ -37,12 +38,17 @@ import net.majorkernelpanic.streaming.MediaStream;
 import net.majorkernelpanic.streaming.Session;
 import net.majorkernelpanic.streaming.SessionBuilder;
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.Editor;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
+import android.media.projection.IMediaProjection;
+import android.media.projection.IMediaProjectionManager;
+import android.media.projection.MediaProjection;
 import android.os.Binder;
 import android.os.IBinder;
+import android.os.ServiceManager;
 import android.preference.PreferenceManager;
 import android.util.Base64;
 import android.util.Log;
@@ -63,7 +69,7 @@ public class RtspServer extends Service {
 	public static String SERVER_NAME = "MajorKernelPanic RTSP Server";
 
 	/** Port used by default. */
-	public static final int DEFAULT_RTSP_PORT = 8086;
+	public static final int DEFAULT_RTSP_PORT = 8554;
 
 	/** Port already in use. */
 	public final static int ERROR_BIND_FAILED = 0x00;
@@ -100,6 +106,8 @@ public class RtspServer extends Service {
     private String mPassword;
 	
 	private int mTransport;
+	private Context mContext;
+	private Session.Callback mCallback;
 
 	public RtspServer() {
 	}
@@ -119,7 +127,7 @@ public class RtspServer extends Service {
 	 * See {@link RtspServer.CallbackListener} to check out what events will be fired once you set up a listener.
 	 * @param listener The listener
 	 */
-	public void addCallbackListener(CallbackListener listener) {
+	private void addCallbackListener(CallbackListener listener) {
 		synchronized (mListeners) {
 			if (!mListeners.isEmpty()) {
 				for (CallbackListener cl : mListeners) {
@@ -134,10 +142,14 @@ public class RtspServer extends Service {
 	 * Removes the listener.
 	 * @param listener The listener
 	 */
-	public void removeCallbackListener(CallbackListener listener) {
+	private void removeCallbackListener(CallbackListener listener) {
 		synchronized (mListeners) {
 			mListeners.remove(listener);				
 		}
+	}
+
+	public void setCallback(Session.Callback callback) {
+		mCallback = callback;
 	}
 
 	/** Returns the port used by the RTSP server. */	
@@ -183,6 +195,10 @@ public class RtspServer extends Service {
 			}
 		}
 		mRestart = false;
+	}
+
+	public boolean isStarted() {
+		return mListenerThread != null;
 	}
 
 	/** 
@@ -250,7 +266,41 @@ public class RtspServer extends Service {
 		// If the configuration is modified, the server will adjust
 		mSharedPreferences.registerOnSharedPreferenceChangeListener(mOnSharedPreferenceChangeListener);
 
-		start();
+		mContext = getApplicationContext();
+		SessionBuilder.getInstance()
+				.setContext(mContext)
+				.setMediaProjection(getMediaProjection())
+				.setCallback(new Session.Callback() {
+					@Override
+					public void onBitrateUpdate(long bitrate, long sentBytes) {
+						if (mCallback != null) mCallback.onBitrateUpdate(bitrate, sentBytes);
+					}
+
+					@Override
+					public void onSessionError(int reason, int streamType, Exception e) {
+						if (mCallback != null) mCallback.onSessionError(reason, streamType, e);
+					}
+
+					@Override
+					public void onPreviewStarted() {
+						if (mCallback != null) mCallback.onPreviewStarted();
+					}
+
+					@Override
+					public void onSessionConfigured() {
+						if (mCallback != null) mCallback.onSessionConfigured();
+					}
+
+					@Override
+					public void onSessionStarted() {
+						if (mCallback != null) mCallback.onSessionStarted();
+					}
+
+					@Override
+					public void onSessionStopped() {
+						if (mCallback != null) mCallback.onSessionStopped();
+					}
+				});
 	}
 
 	@Override
@@ -335,7 +385,9 @@ public class RtspServer extends Service {
 
 		public RequestListener() throws IOException {
 			try {
-				mServer = new ServerSocket(mPort);
+				mServer = new ServerSocket();
+				mServer.setReuseAddress(true);
+				mServer.bind(new InetSocketAddress(mPort));
 				start();
 			} catch (BindException e) {
 				Log.e(TAG,"Port already in use !");
@@ -761,6 +813,18 @@ public class RtspServer extends Service {
 		if (sSession != null) {
 			sSession.syncStop();
 			sSession.release();
+			sSession = null;
+		}
+	}
+
+	private MediaProjection getMediaProjection() {
+		try {
+			IBinder b = ServiceManager.getService(Context.MEDIA_PROJECTION_SERVICE);
+			IMediaProjectionManager projectionManager = IMediaProjectionManager.Stub.asInterface(b);
+			IMediaProjection projection = projectionManager.createProjection(mContext.getApplicationInfo().uid, mContext.getPackageName(), 0, false);
+			return new MediaProjection(mContext, IMediaProjection.Stub.asInterface(projection.asBinder()));
+		} catch (Exception e) {
+			return null;
 		}
 	}
 }

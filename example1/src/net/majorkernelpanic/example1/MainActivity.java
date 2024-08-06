@@ -1,17 +1,19 @@
 package net.majorkernelpanic.example1;
 
+import android.app.AlertDialog;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.Editor;
-import android.media.projection.IMediaProjection;
-import android.media.projection.IMediaProjectionManager;
-import android.media.projection.MediaProjection;
+import android.net.TrafficStats;
 import android.os.Bundle;
 import android.os.IBinder;
-import android.os.ServiceManager;
+import android.os.Process;
 import android.preference.ListPreference;
 import android.preference.PreferenceActivity;
+import android.preference.PreferenceFragment;
 import android.preference.PreferenceManager;
 import android.text.TextUtils;
 import android.util.Log;
@@ -26,7 +28,7 @@ import net.majorkernelpanic.streaming.video.VideoQuality;
 /**
  * A straightforward example of how to use the RTSP server included in libstreaming.
  */
-public class MainActivity extends PreferenceActivity implements SharedPreferences.OnSharedPreferenceChangeListener {
+public class MainActivity extends PreferenceFragment implements SharedPreferences.OnSharedPreferenceChangeListener {
 
     private final static String TAG = "MainActivity";
     private final static String KEY_RTSP = "rtsp";
@@ -41,10 +43,13 @@ public class MainActivity extends PreferenceActivity implements SharedPreference
     private SharedPreferences mPref;
     private ListPreference mVideo, mAudio, mTransport;
 
+    private RtspServer mRtspServer;
+
     private final Session.Callback mCallback = new Session.Callback() {
         @Override
-        public void onBitrateUpdate(long bitrate) {
-            Log.d(TAG, "onBitrateUpdate -> " + bitrate/1000 + " KB/S");
+        public void onBitrateUpdate(long bitrate, long sentBytes) {
+            Log.d(TAG, "onBitrateUpdate -> " + 8*bitrate/1000 + " kbps, sentBytes = " + (sentBytes>>10) + " KB");
+            Log.d(TAG, "getTotalTxBytes -> " + (TrafficStats.getUidTxBytes(Process.myUid())>>10) + " KB");
         }
 
         @Override
@@ -73,36 +78,44 @@ public class MainActivity extends PreferenceActivity implements SharedPreference
         }
     };
 
+    private ServiceConnection mRtspServiceConnection = new ServiceConnection() {
+
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            mRtspServer = ((RtspServer.LocalBinder)service).getService();
+            mRtspServer.setCallback(mCallback);
+            if (mPref.getBoolean(KEY_RTSP, false) && !mRtspServer.isStarted()) {
+                mRtspServer.start();
+            }
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {}
+    };
+
     @Override
-    protected void onCreate(Bundle savedInstanceState) {
+    public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         addPreferencesFromResource(R.xml.preferences);
-        mContext = getApplicationContext();
+        mContext = getContext().getApplicationContext();
 
         // Sets the port of the RTSP server to 1234
         // ffplay -fs -rtsp_transport udp_multicast -fflags nobuffer -flags low_delay -sync video -i rtsp://192.168.100.39:8554/live
         // vlc --network-caching=40 rtsp://192.168.100.39:8554/live
-        mPref = PreferenceManager.getDefaultSharedPreferences(this);
+        mPref = PreferenceManager.getDefaultSharedPreferences(getContext());
         mPref.registerOnSharedPreferenceChangeListener(this);
-        Editor editor = mPref.edit();
-        editor.putString(RtspServer.KEY_PORT, String.valueOf(8554));
-        editor.commit();
 
         boolean audio = !TextUtils.equals(mPref.getString(KEY_AUDIO, "0"), "-1");
         String quality = mPref.getString(KEY_QUALITY, "");
         // Configures the SessionBuilder
         SessionBuilder.getInstance()
-                .setContext(getApplicationContext())
-                .setMediaProjection(getMediaProjection())
-                .setCallback(mCallback)
                 .setAudioEncoder(audio ? SessionBuilder.AUDIO_AAC : SessionBuilder.AUDIO_NONE)
                 .setVideoEncoder(SessionBuilder.VIDEO_H264)
                 .setVideoQuality(TextUtils.isEmpty(quality) ? VideoQuality.DEFAULT_VIDEO_QUALITY : VideoQuality.parseQuality(quality));
 
         // Starts the RTSP server
-        if (mPref.getBoolean(KEY_RTSP, false)) {
-            mContext.startService(new Intent(mContext, RtspServer.class));
-        }
+        mContext.startService(new Intent(mContext, RtspServer.class));
+        getContext().bindService(new Intent(mContext, RtspServer.class), mRtspServiceConnection, Context.BIND_ABOVE_CLIENT);
         if (mPref.getBoolean(KEY_TUIO, false)) {
             mContext.startService(new Intent(mContext, TuioService.class));
         }
@@ -120,29 +133,27 @@ public class MainActivity extends PreferenceActivity implements SharedPreference
     }
 
     @Override
-    protected void onResume() {
+    public void onResume() {
         super.onResume();
         EncoderDebugger.dump("video/avc");
+        EncoderDebugger.dump("video/hevc");
     }
 
-    private MediaProjection getMediaProjection() {
-        try {
-            IBinder b = ServiceManager.getService(Context.MEDIA_PROJECTION_SERVICE);
-            IMediaProjectionManager projectionManager = IMediaProjectionManager.Stub.asInterface(b);
-            IMediaProjection projection = projectionManager.createProjection(mContext.getApplicationInfo().uid, mContext.getPackageName(), 0, false);
-            return new MediaProjection(mContext, IMediaProjection.Stub.asInterface(projection.asBinder()));
-        } catch (Exception e) {
-            return null;
-        }
+    @Override
+    public void onDestroy() {
+        mPref.unregisterOnSharedPreferenceChangeListener(this);
+        if (mRtspServer != null) mRtspServer.setCallback(null);
+        getContext().unbindService(mRtspServiceConnection);
+        super.onDestroy();
     }
 
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String s) {
         switch (s) {
             case KEY_RTSP:
                 if (mPref.getBoolean(KEY_RTSP, false)) {
-                    mContext.startService(new Intent(mContext, RtspServer.class));
+                    if (mRtspServer != null) mRtspServer.start();
                 } else {
-                    mContext.stopService(new Intent(mContext, RtspServer.class));
+                    if (mRtspServer != null) mRtspServer.stop();
                 }
                 break;
             case KEY_TUIO:
