@@ -1,6 +1,7 @@
 package net.majorkernelpanic.example1;
 
 import android.app.Fragment;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Rect;
 import android.hardware.display.DisplayManagerGlobal;
@@ -17,6 +18,7 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 
 public class PreviewFragment extends Fragment implements SharedPreferences.OnSharedPreferenceChangeListener {
 
@@ -25,6 +27,7 @@ public class PreviewFragment extends Fragment implements SharedPreferences.OnSha
 
     private IBinder mDisplayBinder;
     private SurfaceView mSurfaceView;
+    private Button mDisplayRtmp;
 
     private SharedPreferences mPref;
 
@@ -46,6 +49,7 @@ public class PreviewFragment extends Fragment implements SharedPreferences.OnSha
         mSurfaceView.getHolder().addCallback(new SurfaceHolder.Callback() {
             @Override
             public void surfaceCreated(SurfaceHolder holder) {
+                mDisplayRtmp.setVisibility(mPref.getBoolean(KEY_PREVIEW, false) ? View.GONE : View.VISIBLE);
                 if (mPref.getBoolean(KEY_PREVIEW, false)) {
                     mDisplayBinder = createDisplay(holder.getSurface());
                 }
@@ -64,6 +68,13 @@ public class PreviewFragment extends Fragment implements SharedPreferences.OnSha
                 }
             }
         });
+        mDisplayRtmp = view.findViewById(R.id.b_start_stop);
+        mDisplayRtmp.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(new Intent(getActivity(), DisplayRtmpActivity.class));
+            }
+        });
     }
 
     @Override
@@ -74,6 +85,7 @@ public class PreviewFragment extends Fragment implements SharedPreferences.OnSha
 
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String s) {
         if (TextUtils.equals(s, KEY_PREVIEW)) {
+            mDisplayRtmp.setVisibility(mPref.getBoolean(KEY_PREVIEW, false) ? View.GONE : View.VISIBLE);
             if (mPref.getBoolean(KEY_PREVIEW, false)) {
                 mDisplayBinder = createDisplay(mSurfaceView.getHolder().getSurface());
             } else {

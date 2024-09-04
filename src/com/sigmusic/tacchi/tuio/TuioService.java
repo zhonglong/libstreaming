@@ -104,8 +104,9 @@ public class TuioService extends Service {
     @Override
     public void onDestroy() {
     	mClient.stop();
+        Log.i(TAG, "onDestroy: Local service stopped ");
         // Tell the user we stopped.
-        Toast.makeText(this, "Local service stopped", Toast.LENGTH_SHORT).show();
+//        Toast.makeText(this, "Local service stopped", Toast.LENGTH_SHORT).show();
     }
 
     @Override

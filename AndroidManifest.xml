@@ -31,6 +31,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name="net.majorkernelpanic.example1.DisplayRtmpActivity" />
 
         <service android:name="net.majorkernelpanic.streaming.rtsp.RtspServer" />
         <service android:name="com.sigmusic.tacchi.tuio.TuioService">
