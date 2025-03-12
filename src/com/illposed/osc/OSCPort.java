@@ -37,7 +37,9 @@ public abstract class OSCPort {
 	 */
 	protected void finalize() throws Throwable {
 		super.finalize();
-		socket.close();
+		if (socket!=null){
+			socket.close();
+		}
 	}
 	
 	/**

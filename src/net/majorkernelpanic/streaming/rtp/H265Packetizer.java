@@ -42,7 +42,7 @@ public class H265Packetizer extends AbstractPacketizer implements Runnable {
 	private int naluLength = 0;
 	private long delay = 0, oldtime = 0;
 	private Statistics stats = new Statistics();
-	private byte[] sps = null, pps = null, stapa = null;
+	private byte[] vps = null, sps = null, pps = null, stapa = null;
 	byte[] header = new byte[4+H265_NALU_HEADER_SIZE];
 	private int count = 0;
 	private int streamType = 1;
@@ -72,6 +72,40 @@ public class H265Packetizer extends AbstractPacketizer implements Runnable {
 			t = null;
 		}
 	}
+
+	public void setStreamParameters(byte[] pps, byte[] sps, byte[] vps) {
+		this.pps = pps;
+		this.sps = sps;
+		this.vps = vps;
+
+		// A STAP-A NAL (NAL type 48) containing the vps sps and pps of the stream
+		// See: https://www.rfc-editor.org/rfc/rfc7798#section-4.4.2
+		if (pps != null && sps != null && vps != null) {
+			// STAP-A NAL header + NALU 1 (VPS) size + NALU 1 (SPS) size + NALU 2 (PPS) size = 8 bytes
+			stapa = new byte[vps.length + sps.length + pps.length + 8];
+
+			// STAP-A NAL header is 48
+			stapa[0] = (48 << 1);
+			stapa[1] = (byte) 0x01;
+
+			// Write NALU 1 size into the array (NALU 1 is the VPS).
+			stapa[2] = (byte) (vps.length >> 8);
+			stapa[3] = (byte) (vps.length & 0xFF);
+
+			// Write NALU 2 size into the array (NALU 2 is the SPS).
+			stapa[vps.length + 4] = (byte) (sps.length >> 8);
+			stapa[vps.length + 5] = (byte) (sps.length & 0xFF);
+
+			// Write NALU 3 size into the array (NALU 3 is the PPS).
+			stapa[vps.length +sps.length + 6] = (byte) (pps.length >> 8);
+			stapa[vps.length +sps.length + 7] = (byte) (pps.length & 0xFF);
+
+			// Write NALU 1 into the array, then write NALU 2 into the array, then write NALU 3 into the array.
+			System.arraycopy(vps, 0, stapa, 4, vps.length);
+			System.arraycopy(sps, 0, stapa, 6 + vps.length, sps.length);
+			System.arraycopy(pps, 0, stapa, 8 + vps.length + sps.length, pps.length);
+		}
+	}	
 
 	public void run() {
 		long duration = 0;
@@ -131,6 +165,31 @@ public class H265Packetizer extends AbstractPacketizer implements Runnable {
 
 		// Parses the NAL unit type
 		type = (header[4]&0x7E)>>1;
+
+
+		// The stream already contains NAL unit type 32 or 33 or 34, we don't need
+		// to add them to the stream ourselves
+		if (type == 32 || type == 33 || type == 34) {
+			Log.v(TAG,"VPS SPS or PPS present in the stream.");
+			count++;
+			if (count>4) {
+				vps = null;
+				sps = null;
+				pps = null;
+			}
+		}
+
+		// We send two packets containing NALU type 32 (VPS) 33 (SPS) and 34 (PPS)
+		// Those should allow the H265 stream to be decoded even if no SDP was sent to the decoder.
+		boolean keyFrame = (((MediaCodecInputStream)is).getLastBufferInfo().flags & MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0;
+		if ((type == 19 || keyFrame) && vps != null && sps != null && pps != null) {
+			Log.v(TAG,"VPS SPS and PPS prepend to sync frame in the stream.");
+			buffer = socket.requestBuffer();
+			socket.markNextPacket();
+			socket.updateTimestamp(ts);
+			System.arraycopy(stapa, 0, buffer, rtphl, stapa.length);
+			super.send(rtphl+stapa.length);
+		}
 
 		//Log.d(TAG,"- Nal unit length: " + naluLength + " delay: "+delay/1000000+" type: "+type);
 

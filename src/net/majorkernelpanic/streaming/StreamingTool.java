@@ -25,7 +25,7 @@ public class StreamingTool {
         final int video, audio;
         switch (codec) {
             case "OMX.uapi.video.encoder.avc":
-                video = 1;
+                video = 0;
                 audio = 1997;
                 break;
             case "c2.rk.avc.encoder":

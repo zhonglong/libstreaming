@@ -62,5 +62,10 @@
             android:defaultValue="false"
             android:key="sleep"
             android:title="RTP/UDP usleep" />
+
+        <EditTextPreference
+            android:defaultValue="0"
+            android:key="droprate"
+            android:title="Drop rate(%%)" />
     </PreferenceCategory>
 </PreferenceScreen>

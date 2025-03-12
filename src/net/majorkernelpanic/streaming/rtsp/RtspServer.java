@@ -546,7 +546,7 @@ public class RtspServer extends Service {
                 /* ********************************************************************************** */
                 else if (request.method.equalsIgnoreCase("OPTIONS")) {
                     response.status = Response.STATUS_OK;
-                    response.attributes = "Public: OPTIONS,DDESCRIBE,SETUP,TEARDOWN,PLAY\r\n";
+                    response.attributes = "Public: OPTIONS,DESCRIBE,SETUP,TEARDOWN,PLAY\r\n";
                     response.status = Response.STATUS_OK;
                 }
 

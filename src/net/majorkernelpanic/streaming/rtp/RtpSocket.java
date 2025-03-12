@@ -23,6 +23,7 @@ import java.io.OutputStream;
 import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.MulticastSocket;
+import java.util.Random;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import net.majorkernelpanic.streaming.rtcp.SenderReport;
@@ -68,6 +69,8 @@ public class RtpSocket implements Runnable {
 	private byte mTcpHeader[];
 	protected OutputStream mOutputStream = null;
 	private boolean mUdpSleep;
+	private int mDropRate;
+	private Random mRandom = new Random();
 	
 	private AverageBitrate mAverageBitrate;
 
@@ -117,7 +120,7 @@ public class RtpSocket implements Runnable {
 		} catch (Exception e) {
 			throw new RuntimeException(e.getMessage());
 		}
-		
+		mRandom = new Random();
 	}
 
 	private void resetFifo() {
@@ -277,6 +280,10 @@ public class RtpSocket implements Runnable {
 		mUdpSleep = sleep;
 	}
 
+	public void setDropRate(int rate) {
+		mDropRate = rate;
+	}
+
 	/** The Thread sends the packets in the FIFO one by one at a constant rate. */
 	@Override
 	public void run() {
@@ -306,7 +313,7 @@ public class RtpSocket implements Runnable {
 				}
 				mReport.update(mPackets[mBufferOut].getLength(), (mTimestamps[mBufferOut]/100L)*(mClock/1000L)/10000L);
 				mOldTimestamp = mTimestamps[mBufferOut];
-				if (mCount++>30) {
+				if (mCount++>30 && mRandom.nextInt(10000) >= mDropRate) {
 					if (mTransport == TRANSPORT_UDP) {
 						mSocket.send(mPackets[mBufferOut]);
 						if (mUdpSleep) Thread.sleep(0, 1000);

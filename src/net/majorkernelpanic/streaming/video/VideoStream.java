@@ -304,11 +304,17 @@ public abstract class VideoStream extends MediaStream {
 		} else {
 			mediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 3);
 		}
-		if (TextUtils.equals(mMimeType, MediaFormat.MIMETYPE_VIDEO_HEVC)) {
-			mediaFormat.setInteger(MediaFormat.KEY_PREPEND_HEADER_TO_SYNC_FRAMES, 1);
-		}
+//		if (TextUtils.equals(mMimeType, MediaFormat.MIMETYPE_VIDEO_HEVC)) {
+//			mediaFormat.setInteger(MediaFormat.KEY_PREPEND_HEADER_TO_SYNC_FRAMES, 1);
+//		}
 		if (mSettings != null) {
 			switch (mSettings.getString("codec", "")) {
+				case "OMX.uapi.video.encoder.avc":
+					mediaFormat.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR);
+					mediaFormat.setInteger(MediaFormat.KEY_VIDEO_QP_MAX, 45);
+					mediaFormat.setInteger(MediaFormat.KEY_VIDEO_QP_I_MAX, 15);
+					mediaFormat.setInteger(MediaFormat.KEY_VIDEO_QP_MIN, 20);
+					mediaFormat.setInteger(MediaFormat.KEY_VIDEO_QP_I_MIN, 10);
 				case "c2.rk.avc.encoder":
 					mediaFormat.setInteger(MediaFormat.KEY_MAX_BIT_RATE, mQuality.bitrate);
 					mediaFormat.setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, mQuality.framerate);
@@ -327,6 +333,7 @@ public abstract class VideoStream extends MediaStream {
 		inputStream.setMediaFormatCallback((sps, pps) -> reconfigure(sps, pps));
 		mPacketizer.setInputStream(inputStream);
 		mPacketizer.getRtpSocket().setUdpSleep(mSettings != null && mSettings.getBoolean("sleep", false));
+		mPacketizer.getRtpSocket().setDropRate(mSettings != null ? Integer.parseInt(mSettings.getString("droprate", "0")) : 0);
 		mPacketizer.start();
 
 		mStreaming = true;

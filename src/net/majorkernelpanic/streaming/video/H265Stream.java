@@ -90,6 +90,10 @@ public class H265Stream extends VideoStream {
 	public synchronized void start() throws IllegalStateException, IOException {
 		if (!mStreaming) {
 			configure();
+			byte[] pps = Base64.decode(mConfig.getB64PPS(), Base64.NO_WRAP);
+			byte[] sps = Base64.decode(mConfig.getB64SPS(), Base64.NO_WRAP);
+			byte[] vps = Base64.decode(mConfig.getB64VPS(), Base64.NO_WRAP);
+			((H265Packetizer)mPacketizer).setStreamParameters(pps, sps, vps);
 			super.start();
 		}
 	}
@@ -108,6 +112,9 @@ public class H265Stream extends VideoStream {
 	protected void reconfigure(String sps, String pps) {
 		String[] s = sps.split("-");
 		mConfig = new MP4Config(s[0], s[1], s[2]);
+		((H265Packetizer)mPacketizer).setStreamParameters(Base64.decode(mConfig.getB64PPS(), Base64.NO_WRAP),
+				Base64.decode(mConfig.getB64SPS(), Base64.NO_WRAP),
+				Base64.decode(mConfig.getB64VPS(), Base64.NO_WRAP));
 
 		String key = PREF_PREFIX+"h265-mr-"+mRequestedQuality.framerate+","+mRequestedQuality.resX+","+mRequestedQuality.resY;
 		if (mSettings != null) {
