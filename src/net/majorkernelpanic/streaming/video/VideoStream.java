@@ -61,7 +61,7 @@ import android.view.SurfaceControl;
 import android.view.SurfaceHolder;
 import android.view.SurfaceHolder.Callback;
 
-import com.ryan.screenrecoder.glec.EGLRender;
+import com.realtek.rtkcastsender.encodecontrol.EGLEncoder;
 
 /** 
  * Don't use this class directly.
@@ -95,7 +95,7 @@ public abstract class VideoStream extends MediaStream {
 	protected int mMaxFps = 0;	
 
 	protected MediaProjection mMediaProjection;
-	private EGLRender mGLRender;
+	private EGLEncoder mGLRender;
 
 	/** 
 	 * Don't use this class directly.
@@ -362,8 +362,8 @@ public abstract class VideoStream extends MediaStream {
 				case 2:
 					boolean egl = (videoSource == 2);
 					if (egl) {
-						mGLRender = new EGLRender(mSurface, mQuality.resX, mQuality.resY, mQuality.framerate);
-						mGLRender.setPreferences(mSettings);
+						mGLRender = new EGLEncoder(mSurface, mQuality.resX, mQuality.resY, mQuality.framerate);
+//						mGLRender.setPreferences(mSettings);
 					}
 
 					boolean secure = Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Build.VERSION.SDK_INT == Build.VERSION_CODES.R && "S" != Build.VERSION.CODENAME;

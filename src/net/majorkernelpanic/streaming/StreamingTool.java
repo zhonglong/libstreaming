@@ -22,20 +22,31 @@ public class StreamingTool {
 
         SharedPreferences.Editor editor = pref.edit();
         editor.putString(KEY_CODEC, codec);
+        editor.putString("quality", "4000-30-1920-1080");
         final int video, audio;
         switch (codec) {
             case "OMX.uapi.video.encoder.avc":
+                // V100
                 video = 0;
                 audio = 1997;
+                editor.putString("quality", "6000-30-1920-1080");
                 break;
             case "c2.rk.avc.encoder":
+                // RK3588/RK3576
                 video = 1;
                 audio = 0;
                 editor.putBoolean("sleep", true);
                 break;
             case "OMX.amlogic.video.encoder.avc":
+                // T33Z
                 video = 2;
                 audio = 8;
+                break;
+            case "c2.amlogic.avc.encoder":
+                // 4152E
+                video = 2;
+                audio = 0;
+                editor.putBoolean("sleep", true);
                 break;
             default:
                 video = 0;
@@ -44,7 +55,6 @@ public class StreamingTool {
         }
         editor.putString("video", String.valueOf(video));
         editor.putString("audio", String.valueOf(audio));
-        editor.putString("quality", "4000-30-1920-1080");
         editor.apply();
     }
 

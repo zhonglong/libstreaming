@@ -1,6 +1,5 @@
-package com.ryan.screenrecoder.glec;
+package com.realtek.rtkcastsender.encodecontrol;
 
-import android.content.SharedPreferences;
 import android.graphics.SurfaceTexture;
 import android.opengl.EGL14;
 import android.opengl.EGLConfig;
@@ -8,22 +7,18 @@ import android.opengl.EGLContext;
 import android.opengl.EGLDisplay;
 import android.opengl.EGLExt;
 import android.opengl.EGLSurface;
-import android.os.ConditionVariable;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.Message;
 import android.os.SystemClock;
 import android.util.Log;
 import android.view.Surface;
 
+import androidx.annotation.NonNull;
 
-/**
- * Created by zx315476228 on 17-3-3.
- * 源自：https://github.com/RyanRQ/ScreenRecoder，并做了部分修改
- */
-
-public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
-    private static final String TAG = "EncodeDecodeSurface";
-    private static final boolean VERBOSE = false;           // lots of logging
-
-    private STextureRender mTextureRender;
+public class EGLEncoder implements SurfaceTexture.OnFrameAvailableListener {
+    private static final String TAG = "EGLEncoder";
+    private RtkTextureRender mTextureRender;
     private SurfaceTexture mSurfaceTexture;
 
     private EGLDisplay mEGLDisplay = EGL14.EGL_NO_DISPLAY;
@@ -37,32 +32,50 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
     private int mWidth;
     private int mHeight;
     private int fps;
-    private int video_interval;
-    private volatile boolean mFrameAvailable = false;
+    private int mVideoInterval;
+    private boolean mFrameAvailable = true;
+    private onFrameCallBack mFrameCallBack;
+
+    private static final int INITIAL_FRAMES_INTERVAL_MILLISECONDS = 20;
+    private static final int INITIAL_FRAMES_NUM = 2;
+
+    private static final long INITIAL_FRAMES_BASE_NANOSECONDS = INITIAL_FRAMES_INTERVAL_MILLISECONDS * 1000 * 1000 * INITIAL_FRAMES_NUM;
 
     private volatile boolean start;
-    private long time = 0;
-    private long current_time;
+    private int mInCount = 0;
+    private int mOutCount = 0;
 
-    private SharedPreferences mSettings;
-    private ConditionVariable mWaiter = new ConditionVariable();
+    private Object lock;
 
-    public EGLRender(Surface surface, int mWidth, int mHeight, int fps) {
+    public final static int MSG_NEXT_OUTPUT = 1;
+
+    HandlerThread mHandleThread;
+    Handler mHandle;
+
+    public void setCallBack(onFrameCallBack callBack) {
+        mFrameCallBack = callBack;
+    }
+
+    public interface onFrameCallBack {
+        void onUpdate();
+    }
+
+
+    public EGLEncoder(Surface surface, int mWidth, int mHeight, int fps) {
         this.mWidth = mWidth;
         this.mHeight = mHeight;
+
+        lock = new Object();
         initFPs(fps);
         eglSetup(surface);
         makeCurrent(0);
         setup();
     }
 
-    public void setPreferences(SharedPreferences prefs) {
-        mSettings = prefs;
-    }
-
     private void initFPs(int fps) {
         this.fps = fps;
-        video_interval = 1000 / fps;
+        mVideoInterval = 1000 / fps;
+        Log.d(TAG, "initFPS, mVideoInterval:" + mVideoInterval);
     }
 
     /**
@@ -147,10 +160,10 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
      * Creates interconnected instances of TextureRender, SurfaceTexture, and Surface.
      */
     private void setup() {
-        mTextureRender = new STextureRender(mWidth, mHeight);
+        mTextureRender = new RtkTextureRender();
         mTextureRender.surfaceCreated();
 
-        if (VERBOSE) Log.d(TAG, "textureID=" + mTextureRender.getTextureId());
+        Log.d(TAG, "textureID=" + mTextureRender.getTextureId());
         mSurfaceTexture = new SurfaceTexture(mTextureRender.getTextureId());
         mSurfaceTexture.setDefaultBufferSize(mWidth, mHeight);
         mSurfaceTexture.setOnFrameAvailableListener(this);
@@ -196,6 +209,9 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
         }
     }
 
+    /**
+     * Makes our EGL context and surface current.
+     */
     public void makeCurrent(int index) {
 
         if (index == 0) {
@@ -216,9 +232,19 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
     }
 
     public void awaitNewImage() {
-        if (mFrameAvailable) {
-            mFrameAvailable = false;
-            mSurfaceTexture.updateTexImage();
+        synchronized (lock) {
+            try {
+                // wait 2 fps time. in normal case
+                // it will be notified in on fps time
+                lock.wait(mVideoInterval * 2);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+            if(mFrameAvailable) {
+                mSurfaceTexture.updateTexImage();
+                mFrameAvailable = false;
+            }
         }
     }
 
@@ -228,56 +254,106 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
         return result;
     }
 
-    private int count = 1;
-
     @Override
     public void onFrameAvailable(SurfaceTexture surfaceTexture) {
-        mFrameAvailable = true;
-    }
+        synchronized (lock) {
 
-    private long computePresentationTimeNsec(int frameIndex) {
-//        final long ONE_BILLION = 1000000000;
-//        return frameIndex * ONE_BILLION / fps;
-        return mSurfaceTexture.getTimestamp();
-    }
+            ProfileTimeTracker.Trace(ProfileTimeTracker.EGL_ENCODE_IN_COUNT, mInCount, 0);
 
-    public void drawImage() {
-        if (mSettings != null && mSettings.getBoolean("video_mute", false)) {
-            mTextureRender.drawBlankScreen();
-        } else {
-            mTextureRender.drawFrame();
+            mFrameAvailable = true;
+            mInCount++;
         }
     }
 
+    // nano seconds
+    private long computePresentationTimeNsec(int frameIndex) {
+        final long ONE_BILLION = 1000000000;
+        if(frameIndex > INITIAL_FRAMES_NUM) {
+            return (frameIndex - INITIAL_FRAMES_NUM) * ONE_BILLION / fps + INITIAL_FRAMES_BASE_NANOSECONDS;
+        }
+        else
+            return frameIndex * INITIAL_FRAMES_INTERVAL_MILLISECONDS * 1000 * 1000;
+    }
+
+    public void drawImage() {
+        mTextureRender.drawFrame(mSurfaceTexture);
+    }
+
+    private long getNextDelay(int drawIndex) {
+        if(drawIndex <= INITIAL_FRAMES_NUM) {
+                return INITIAL_FRAMES_INTERVAL_MILLISECONDS;
+        } else {
+            return mVideoInterval;
+        }
+    }
     /**
-     * 开始录屏
+     * start screen recording
      */
     public void start() {
-        new Thread(() -> {
-            start = true;
-            while (start && !mFrameAvailable) SystemClock.sleep(video_interval);
-            while (start) {
-                makeCurrent(1);
-                awaitNewImage();
-                current_time = System.currentTimeMillis();
-                if (current_time - time >= video_interval) {
-                    //todo 帧率控制
-                    drawImage();
-                    setPresentationTime(computePresentationTimeNsec(count++));
-                    swapBuffers();
-                    time = current_time;
-                } else {
-                    SystemClock.sleep(video_interval - (current_time - time));
+        new Thread(() -> run(), TAG).start();
+    }
+
+    private void run() {
+        start = true;
+        Log.i(TAG, "EGLEncoder started to run...");
+        mOutCount = 0;
+        mInCount = 0;
+        mHandleThread = new HandlerThread("EGLHandler");
+        mHandleThread.start();
+
+        mHandle = new Handler(mHandleThread.getLooper()) {
+            @Override
+            public void handleMessage(@NonNull Message msg) {
+                switch (msg.what) {
+                    case MSG_NEXT_OUTPUT:
+                        synchronized (lock) {
+                            lock.notify();
+                        }
+                        sendMessageDelayed(Message.obtain(mHandle, MSG_NEXT_OUTPUT), getNextDelay(mOutCount));
+                        break;
                 }
             }
-            mWaiter.open();
-        }, TAG).start();
+        };
+        mHandle.sendMessageDelayed(Message.obtain(mHandle, MSG_NEXT_OUTPUT), getNextDelay(mOutCount));
+
+        ProfileTimeTracker.Trace(ProfileTimeTracker.EGL_ENCODE_START_TIME, SystemClock.elapsedRealtime(), 0);
+
+        while (start) {
+            makeCurrent(1);
+
+            // wait for new image, update to the latest texture.
+            awaitNewImage();
+
+            if (mOutCount <= INITIAL_FRAMES_NUM) {
+                Log.i(TAG, "EGLEncoder draw first " + mOutCount + " frame");
+            }
+
+            ProfileTimeTracker.Trace(ProfileTimeTracker.EGL_ENCODE_OUT_COUNT, mOutCount, 0);
+            ProfileTimeTracker.Trace(ProfileTimeTracker.EGL_ENCODE_CUR_UPDATE_TIME, SystemClock.elapsedRealtime(), 0);
+
+            drawImage();
+            //mFrameCallBack.onUpdate();
+            setPresentationTime(computePresentationTimeNsec(mOutCount));
+            swapBuffers();
+            mOutCount++;
+
+        }
+        mHandleThread.quit();
+        Log.i(TAG, "EGLEncoder stopped...");
     }
 
     public void stop() {
         start = false;
-        mWaiter.block(2 * video_interval);
-        mSurfaceTexture.release();
-        decodeSurface.release();
+    }
+
+    static class ProfileTimeTracker {
+        public final static int EGL_ENCODE_START_TIME = 0;
+        public final static int EGL_ENCODE_FIRST_TIME = 1;
+        public final static int EGL_ENCODE_IN_COUNT = 2;
+        public final static int EGL_ENCODE_OUT_COUNT = 3;
+        public final static int EGL_ENCODE_LAST_UPDATE_TIME = 4;
+        public final static int EGL_ENCODE_CUR_UPDATE_TIME = 5;
+
+        public static void Trace(int tag, long val, int extra) { }
     }
 }

@@ -63,8 +63,11 @@ public class TuioService extends Service {
     	/** grab the window from the system service that we can grab the width and height from **/
     	window = (WindowManager) getSystemService(Context.WINDOW_SERVICE); 
         Display display = window.getDefaultDisplay();
-    	int width = display.getWidth();
-    	int height = display.getHeight();
+        // 获取实际屏幕的宽高（包括状态栏和导航栏）
+        android.graphics.Point size = new android.graphics.Point();
+        display.getRealSize(size);
+    	int width = size.x;
+    	int height = size.y;
     	Log.d(TAG, "Creating TUIO server with width: "+width+"and height:"+height);
     	
     	/** Start the TUIO client with the port from preferences and display parameters **/
