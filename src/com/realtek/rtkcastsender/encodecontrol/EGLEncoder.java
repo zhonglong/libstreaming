@@ -14,7 +14,7 @@ import android.os.SystemClock;
 import android.util.Log;
 import android.view.Surface;
 
-import androidx.annotation.NonNull;
+import com.goke.videotest.utils.AverageTime;
 
 public class EGLEncoder implements SurfaceTexture.OnFrameAvailableListener {
     private static final String TAG = "EGLEncoder";
@@ -37,7 +37,7 @@ public class EGLEncoder implements SurfaceTexture.OnFrameAvailableListener {
     private onFrameCallBack mFrameCallBack;
 
     private static final int INITIAL_FRAMES_INTERVAL_MILLISECONDS = 20;
-    private static final int INITIAL_FRAMES_NUM = 2;
+    private static final int INITIAL_FRAMES_NUM = 0;
 
     private static final long INITIAL_FRAMES_BASE_NANOSECONDS = INITIAL_FRAMES_INTERVAL_MILLISECONDS * 1000 * 1000 * INITIAL_FRAMES_NUM;
 
@@ -162,6 +162,7 @@ public class EGLEncoder implements SurfaceTexture.OnFrameAvailableListener {
     private void setup() {
         mTextureRender = new RtkTextureRender();
         mTextureRender.surfaceCreated();
+        mTextureRender.setRenderSize(mWidth, mHeight);
 
         Log.d(TAG, "textureID=" + mTextureRender.getTextureId());
         mSurfaceTexture = new SurfaceTexture(mTextureRender.getTextureId());
@@ -303,7 +304,7 @@ public class EGLEncoder implements SurfaceTexture.OnFrameAvailableListener {
 
         mHandle = new Handler(mHandleThread.getLooper()) {
             @Override
-            public void handleMessage(@NonNull Message msg) {
+            public void handleMessage(Message msg) {
                 switch (msg.what) {
                     case MSG_NEXT_OUTPUT:
                         synchronized (lock) {
@@ -318,6 +319,7 @@ public class EGLEncoder implements SurfaceTexture.OnFrameAvailableListener {
 
         ProfileTimeTracker.Trace(ProfileTimeTracker.EGL_ENCODE_START_TIME, SystemClock.elapsedRealtime(), 0);
 
+        final AverageTime encoder = AverageTime.getInstance("encoder");
         while (start) {
             makeCurrent(1);
 
@@ -331,9 +333,14 @@ public class EGLEncoder implements SurfaceTexture.OnFrameAvailableListener {
             ProfileTimeTracker.Trace(ProfileTimeTracker.EGL_ENCODE_OUT_COUNT, mOutCount, 0);
             ProfileTimeTracker.Trace(ProfileTimeTracker.EGL_ENCODE_CUR_UPDATE_TIME, SystemClock.elapsedRealtime(), 0);
 
+            final long presentationTimeNs = computePresentationTimeNsec(mOutCount);
+            encoder.push(presentationTimeNs / 1000);
+//            Log.d("avoip", "+++ " + mOutCount + " -> " + (presentationTimeNs / 1000));
+//            if (mOutCount % 90 == 0) Log.i("mediacodec", "IDR frame produced");
+//            Log.i("C2RKComponent", "start processing frame #" + mOutCount + " -> " + presentationTimeNs / 1000);
             drawImage();
             //mFrameCallBack.onUpdate();
-            setPresentationTime(computePresentationTimeNsec(mOutCount));
+            setPresentationTime(presentationTimeNs);
             swapBuffers();
             mOutCount++;
 

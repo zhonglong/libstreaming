@@ -49,6 +49,8 @@ public class RtpSocket implements Runnable {
 	public static final int RTP_HEADER_LENGTH = 12;
 	public static final int MTU = 1500;
 
+	public static final int THRESHOLD = 4; //48Mbps
+
 	private MulticastSocket mSocket;
 	private DatagramPacket[] mPackets;
 	private byte[][] mBuffers;
@@ -74,6 +76,11 @@ public class RtpSocket implements Runnable {
 	
 	private AverageBitrate mAverageBitrate;
 
+	private boolean mGreenLight = true;
+	private int mPace, mMaxPace;
+	private volatile int mIframe = -1;
+	private long mCurrentThreadTimeMillis;
+
 	/**
 	 * This RTP socket implements a buffering mechanism relying on a FIFO of buffers and a Thread.
 	 * @throws IOException
@@ -81,7 +88,7 @@ public class RtpSocket implements Runnable {
 	public RtpSocket() {
 		
 		mCacheSize = 0;
-		mBufferCount = 300; // TODO: readjust that when the FIFO is full 
+		mBufferCount = 1024; // TODO: readjust that when the FIFO is full
 		mBuffers = new byte[mBufferCount][];
 		mPackets = new DatagramPacket[mBufferCount];
 		mReport = new SenderReport();
@@ -115,8 +122,9 @@ public class RtpSocket implements Runnable {
 		}
 
 		try {
-		mSocket = new MulticastSocket();
-		Log.d(TAG, "getSendBufferSize -> " + mSocket.getSendBufferSize());
+			mSocket = new MulticastSocket();
+//			mSocket.setSendBufferSize(1024 * 1024);
+			Log.d(TAG, "getSendBufferSize -> " + mSocket.getSendBufferSize());
 		} catch (Exception e) {
 			throw new RuntimeException(e.getMessage());
 		}
@@ -284,6 +292,10 @@ public class RtpSocket implements Runnable {
 		mDropRate = rate;
 	}
 
+	public void markIframe() {
+		mIframe = mBufferIn;
+	}
+
 	/** The Thread sends the packets in the FIFO one by one at a constant rate. */
 	@Override
 	public void run() {
@@ -292,37 +304,53 @@ public class RtpSocket implements Runnable {
 			// Caches mCacheSize milliseconds of the stream in the FIFO.
 			Thread.sleep(mCacheSize);
 			long delta = 0;
-			while (mBufferCommitted.tryAcquire(4,TimeUnit.SECONDS)) {
-				if (mOldTimestamp != 0) {
-					// We use our knowledge of the clock rate of the stream and the difference between two timestamps to
-					// compute the time lapse that the packet represents.
-					if ((mTimestamps[mBufferOut]-mOldTimestamp)>0) {
-						stats.push(mTimestamps[mBufferOut]-mOldTimestamp);
-						long d = stats.average()/1000000;
-						//Log.d(TAG,"delay: "+d+" d: "+(mTimestamps[mBufferOut]-mOldTimestamp)/1000000);
-						// We ensure that packets are sent at a constant and suitable rate no matter how the RtpSocket is used.
-						if (mCacheSize>0) Thread.sleep(d);
-					} else if ((mTimestamps[mBufferOut]-mOldTimestamp)<0) {
-						Log.e(TAG, "TS: "+mTimestamps[mBufferOut]+" OLD: "+mOldTimestamp);
+//			while (mBufferCommitted.tryAcquire(4,TimeUnit.SECONDS)) {
+//				if (mOldTimestamp != 0) {
+//					// We use our knowledge of the clock rate of the stream and the difference between two timestamps to
+//					// compute the time lapse that the packet represents.
+//					if ((mTimestamps[mBufferOut]-mOldTimestamp)>0) {
+//						stats.push(mTimestamps[mBufferOut]-mOldTimestamp);
+//						long d = stats.average()/1000000;
+//						//Log.d(TAG,"delay: "+d+" d: "+(mTimestamps[mBufferOut]-mOldTimestamp)/1000000);
+//						// We ensure that packets are sent at a constant and suitable rate no matter how the RtpSocket is used.
+//						if (mCacheSize>0) Thread.sleep(d);
+//					} else if ((mTimestamps[mBufferOut]-mOldTimestamp)<0) {
+//						Log.e(TAG, "TS: "+mTimestamps[mBufferOut]+" OLD: "+mOldTimestamp);
+//					}
+//					delta += mTimestamps[mBufferOut]-mOldTimestamp;
+//					if (delta>500000000 || delta<0) {
+//						//Log.d(TAG,"permits: "+mBufferCommitted.availablePermits());
+//						delta = 0;
+//					}
+//				}
+//				mReport.update(mPackets[mBufferOut].getLength(), (mTimestamps[mBufferOut]/100L)*(mClock/1000L)/10000L);
+//				mOldTimestamp = mTimestamps[mBufferOut];
+//				if (mCount++>30 && mRandom.nextInt(10000) >= mDropRate) {
+			while (true) {
+				if (mGreenLight) {
+					if (!mBufferCommitted.tryAcquire(4,TimeUnit.SECONDS)) break;
+					if (mCount++ > 30) {
+						if (mTransport == TRANSPORT_UDP) {
+							mSocket.send(mPackets[mBufferOut]);
+						} else {
+							sendTCP();
+						}
 					}
-					delta += mTimestamps[mBufferOut]-mOldTimestamp;
-					if (delta>500000000 || delta<0) {
-						//Log.d(TAG,"permits: "+mBufferCommitted.availablePermits());
-						delta = 0;
+//					if (mCurrentThreadTimeMillis == 0 && mIframe >= 0) {
+//						mCurrentThreadTimeMillis = SystemClock.currentThreadTimeMillis();
+//					}
+					if (mBufferOut == mIframe) {
+//						long diff = SystemClock.currentThreadTimeMillis() - mCurrentThreadTimeMillis;
+//						Log.d("avoip", "++++++... " + (mTimestamps[mBufferOut]/100L)*(90000/1000L)/10000L + " -> " + diff);
+//						mCurrentThreadTimeMillis = 0;
+						mIframe = -1;
 					}
+					if (++mBufferOut >= mBufferCount) mBufferOut = 0;
+					mBufferRequested.release();
+				} else {
+//					Thread.sleep(0, 1000);
 				}
-				mReport.update(mPackets[mBufferOut].getLength(), (mTimestamps[mBufferOut]/100L)*(mClock/1000L)/10000L);
-				mOldTimestamp = mTimestamps[mBufferOut];
-				if (mCount++>30 && mRandom.nextInt(10000) >= mDropRate) {
-					if (mTransport == TRANSPORT_UDP) {
-						mSocket.send(mPackets[mBufferOut]);
-						if (mUdpSleep) Thread.sleep(0, 1000);
-					} else {
-						sendTCP();
-					}
-				}
-				if (++mBufferOut>=mBufferCount) mBufferOut = 0;
-				mBufferRequested.release();
+				checkThrottle(mGreenLight);
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -348,6 +376,22 @@ public class RtpSocket implements Runnable {
 		for (end--; end >= begin; end--) {
 			buffer[end] = (byte) (n % 256);
 			n >>= 8;
+		}
+	}
+
+	private void checkThrottle(boolean sent) {
+		long now = System.nanoTime() / 1000_000;
+		if (mOldTimestamp == now) {
+			if (sent) mPace++;
+		} else {
+			mPace = sent ? 1 : 0;
+			mOldTimestamp = now;
+		}
+
+		mGreenLight = !mUdpSleep || (mPace < THRESHOLD);
+		if (mMaxPace < mPace) {
+			mMaxPace = mPace;
+			Log.i("avoip", "......... " + mMaxPace);
 		}
 	}
 

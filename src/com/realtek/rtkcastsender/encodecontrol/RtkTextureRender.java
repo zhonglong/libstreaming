@@ -58,6 +58,8 @@ public  class RtkTextureRender {
     private int maPositionHandle;
     private int maTextureHandle;
 
+    private int mRenderWidth = -1;
+    private int mRenderHeight = -1;
 
     public RtkTextureRender() {
         mTriangleVertices = ByteBuffer.allocateDirect(
@@ -65,6 +67,11 @@ public  class RtkTextureRender {
                 .order(ByteOrder.nativeOrder()).asFloatBuffer();
         mTriangleVertices.put(mTriangleVerticesData).position(0);
         Matrix.setIdentityM(mSTMatrix, 0);
+    }
+
+    public void setRenderSize(int width, int height) {
+        mRenderWidth = width;
+        mRenderHeight = height;
     }
 
     public int getTextureId() {
@@ -217,6 +224,10 @@ public  class RtkTextureRender {
     public void drawFrame(SurfaceTexture st) {
         checkGlError("onDrawFrame start");
         st.getTransformMatrix(mSTMatrix);
+
+        if (mRenderWidth > 0 && mRenderHeight > 0) {
+            GLES20.glViewport(0, 0, mRenderWidth, mRenderHeight);
+        }
 
         GLES20.glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
         GLES20.glClear(GLES20.GL_DEPTH_BUFFER_BIT | GLES20.GL_COLOR_BUFFER_BIT);

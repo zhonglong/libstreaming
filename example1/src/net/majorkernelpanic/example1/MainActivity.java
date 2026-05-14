@@ -23,6 +23,7 @@ import com.sigmusic.tacchi.tuio.TuioService;
 import net.majorkernelpanic.streaming.Session;
 import net.majorkernelpanic.streaming.SessionBuilder;
 import net.majorkernelpanic.streaming.rtsp.RtspServer;
+import net.majorkernelpanic.streaming.rtsp.UdpReport;
 import net.majorkernelpanic.streaming.video.VideoQuality;
 
 /**
@@ -130,6 +131,7 @@ public class MainActivity extends PreferenceFragment implements SharedPreference
             SessionBuilder.getInstance().setDestination("234.5.6.7");
             new RtpSeqThread().start();
         }
+        new Thread(new UdpReport(), "UdpReport").start();
     }
 
     @Override

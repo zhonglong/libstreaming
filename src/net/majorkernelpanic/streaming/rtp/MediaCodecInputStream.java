@@ -79,6 +79,7 @@ public class MediaCodecInputStream extends InputStream {
 				while (!Thread.interrupted() && !mClosed) {
 					mIndex = mMediaCodec.dequeueOutputBuffer(mBufferInfo, 500000);
 					if (mIndex>=0 ){
+//						Log.i("C2RKComponent","processed frame # -> " + mBufferInfo.presentationTimeUs);
 						if (mBufferInfo.flags == MediaCodec.BUFFER_FLAG_CODEC_CONFIG && !mFound && mCallback != null) {
 							int len = mBufferInfo.size;
 							byte[] csd = new byte[len];

@@ -72,7 +72,7 @@ public class PreviewFragment extends Fragment implements SharedPreferences.OnSha
         mDisplayRtmp.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                startActivity(new Intent(getActivity(), DisplayRtmpActivity.class));
+//                startActivity(new Intent(getActivity(), DisplayRtmpActivity.class));
             }
         });
     }

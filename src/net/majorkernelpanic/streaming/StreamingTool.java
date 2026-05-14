@@ -48,6 +48,12 @@ public class StreamingTool {
                 audio = 0;
                 editor.putBoolean("sleep", true);
                 break;
+            case "c2.mtk.avc.encoder":
+                //9679
+                video = 2;
+                audio = 0;
+                editor.putBoolean("sleep", true);
+                break;
             default:
                 video = 0;
                 audio = Q ? 0 : -1;

@@ -23,6 +23,8 @@ import android.annotation.SuppressLint;
 import android.media.MediaCodec;
 import android.util.Log;
 
+import com.goke.videotest.utils.AverageTime;
+
 /**
  * 
  *   RFC 3984.
@@ -46,6 +48,8 @@ public class H264Packetizer extends AbstractPacketizer implements Runnable {
 	private int count = 0;
 	private int streamType = 1;
 
+	private final AverageTime encoder = AverageTime.getInstance("encoder");
+	private final AverageTime rtp = AverageTime.getInstance("rtp");
 
 	public H264Packetizer() {
 		super();
@@ -168,6 +172,8 @@ public class H264Packetizer extends AbstractPacketizer implements Runnable {
 			//ts += delay;
 			naluLength = is.available()+1;
 		}
+		final long rtpts = (ts/100L)*(90000/1000L)/10000L;
+		int packet = 0;
 
 		// Parses the NAL unit type
 		type = header[4]&0x1F;
@@ -187,6 +193,12 @@ public class H264Packetizer extends AbstractPacketizer implements Runnable {
 		// We send two packets containing NALU type 7 (SPS) and 8 (PPS)
 		// Those should allow the H264 stream to be decoded even if no SDP was sent to the decoder.
 		boolean keyFrame = (((MediaCodecInputStream)is).getLastBufferInfo().flags & MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0;
+		if (keyFrame) {
+//			Log.d("mediacodec", "encoder spent(ms): " + encoder.averageUs() / 1000);
+		}
+		encoder.pop(ts / 1000);
+		rtp.push(rtpts);
+//		Log.d("avoip", (keyFrame ? "(I)" : "") + "++++++ " + (ts / 1000) + " -> " + rtpts);
 		if ((type == 5 || keyFrame) && sps != null && pps != null) {
 			Log.v(TAG,"SPS and PPS prepend to sync frame in the stream.");
 			buffer = socket.requestBuffer();
@@ -194,6 +206,7 @@ public class H264Packetizer extends AbstractPacketizer implements Runnable {
 			socket.updateTimestamp(ts);
 			System.arraycopy(stapa, 0, buffer, rtphl, stapa.length);
 			super.send(rtphl+stapa.length);
+			packet++;
 		}
 
 		//Log.d(TAG,"- Nal unit length: " + naluLength + " delay: "+delay/1000000+" type: "+type);
@@ -206,6 +219,7 @@ public class H264Packetizer extends AbstractPacketizer implements Runnable {
 			socket.updateTimestamp(ts);
 			socket.markNextPacket();
 			super.send(naluLength+rtphl);
+			packet++;
 			//Log.d(TAG,"----- Single NAL unit - len:"+len+" delay: "+delay);
 		}
 		// Large NAL unit => Split nal unit 
@@ -229,13 +243,16 @@ public class H264Packetizer extends AbstractPacketizer implements Runnable {
 					// End bit on
 					buffer[rtphl+1] += 0x40;
 					socket.markNextPacket();
+					if (keyFrame) socket.markIframe();
 				}
 				super.send(len+rtphl+2);
+				packet++;
 				// Switch start bit
 				header[1] = (byte) (header[1] & 0x7F); 
 				//Log.d(TAG,"----- FU-A unit, sum:"+sum);
 			}
 		}
+//		Log.d("avoip", "++++++... " + rtpts + " (" + packet);
 	}
 
 	private int fill(byte[] buffer, int offset,int length) throws IOException {

@@ -63,7 +63,7 @@ public class TuioService extends Service {
     	/** grab the window from the system service that we can grab the width and height from **/
     	window = (WindowManager) getSystemService(Context.WINDOW_SERVICE); 
         Display display = window.getDefaultDisplay();
-        // »ñÈ¡Êµ¼ÊÆÁÄ»µÄ¿í¸ß£¨°üÀ¨×´Ì¬À¸ºÍµ¼º½À¸£©
+        // è·å–å®é™…å±å¹•çš„å®½é«˜ï¼ˆåŒ…æ‹¬çŠ¶æ€æ å’Œå¯¼èˆªæ ï¼‰
         android.graphics.Point size = new android.graphics.Point();
         display.getRealSize(size);
     	int width = size.x;

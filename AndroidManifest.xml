@@ -24,17 +24,19 @@
         android:theme="@style/AppTheme" >
         <activity
             android:name="net.majorkernelpanic.example1.StartupActivity"
-            android:label="@string/app_name" >
+            android:label="@string/app_name"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name="net.majorkernelpanic.example1.DisplayRtmpActivity" />
 
         <service android:name="net.majorkernelpanic.streaming.rtsp.RtspServer" />
-        <service android:name="com.sigmusic.tacchi.tuio.TuioService">
+        <service
+            android:name="com.sigmusic.tacchi.tuio.TuioService"
+            android:exported="false">
             <intent-filter>
                 <action android:name="com.sigmusic.tacchi.tuio.TUIO_SERVICE" />
             </intent-filter>
