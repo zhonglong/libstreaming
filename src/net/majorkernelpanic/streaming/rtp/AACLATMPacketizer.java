@@ -42,6 +42,7 @@ public class AACLATMPacketizer extends AbstractPacketizer implements Runnable {
 	public AACLATMPacketizer() {
 		super();
 		socket.setCacheSize(0);
+		socket.setPayload(97);
 	}
 
 	public void start() {

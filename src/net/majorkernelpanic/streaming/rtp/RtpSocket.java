@@ -156,6 +156,12 @@ public class RtpSocket implements Runnable {
 		mReport.setSSRC(mSsrc);
 	}
 
+	public void setPayload(int payload) {
+		for (int i=0;i<mBufferCount;i++) {
+			mBuffers[i][1] = (byte) (payload & 0x7F);
+		}
+	}
+
 	/** Returns the SSRC of the stream. */
 	public int getSSRC() {
 		return mSsrc;

@@ -165,9 +165,9 @@ public class AACStream extends AudioStream {
 
 			// TODO: streamType always 5 ? profile-level-id always 15 ?
 
-			mSessionDescription = "m=audio "+String.valueOf(getDestinationPorts()[0])+" RTP/AVP 96\r\n" +
-					"a=rtpmap:96 mpeg4-generic/"+mQuality.samplingRate+"\r\n"+
-					"a=fmtp:96 streamtype=5; profile-level-id=15; mode=AAC-hbr; config="+Integer.toHexString(mConfig)+"; SizeLength=13; IndexLength=3; IndexDeltaLength=3;\r\n";
+			mSessionDescription = "m=audio "+String.valueOf(getDestinationPorts()[0])+" RTP/AVP 97\r\n" +
+					"a=rtpmap:97 mpeg4-generic/"+mQuality.samplingRate+"\r\n"+
+					"a=fmtp:97 streamtype=5; profile-level-id=15; mode=AAC-hbr; config="+Integer.toHexString(mConfig)+"; SizeLength=13; IndexLength=3; IndexDeltaLength=3;\r\n";
 
 		} else {
 
@@ -175,9 +175,9 @@ public class AACStream extends AudioStream {
 			mChannel = 1;
 			mConfig = (mProfile & 0x1F) << 11 | (mSamplingRateIndex & 0x0F) << 7 | (mChannel & 0x0F) << 3;
 
-			mSessionDescription = "m=audio "+String.valueOf(getDestinationPorts()[0])+" RTP/AVP 96\r\n" +
-					"a=rtpmap:96 mpeg4-generic/"+mQuality.samplingRate+"\r\n"+
-					"a=fmtp:96 streamtype=5; profile-level-id=15; mode=AAC-hbr; config="+Integer.toHexString(mConfig)+"; SizeLength=13; IndexLength=3; IndexDeltaLength=3;\r\n";			
+			mSessionDescription = "m=audio "+String.valueOf(getDestinationPorts()[0])+" RTP/AVP 97\r\n" +
+					"a=rtpmap:97 mpeg4-generic/"+mQuality.samplingRate+"\r\n"+
+					"a=fmtp:97 streamtype=5; profile-level-id=15; mode=AAC-hbr; config="+Integer.toHexString(mConfig)+"; SizeLength=13; IndexLength=3; IndexDeltaLength=3;\r\n";
 
 		}
 

@@ -21,11 +21,8 @@ package net.majorkernelpanic.streaming;
 import java.io.IOException;
 import java.net.InetAddress;
 import net.majorkernelpanic.streaming.audio.AACStream;
-import net.majorkernelpanic.streaming.audio.AMRNBStream;
 import net.majorkernelpanic.streaming.audio.AudioQuality;
 import net.majorkernelpanic.streaming.audio.AudioStream;
-import net.majorkernelpanic.streaming.gl.SurfaceView;
-import net.majorkernelpanic.streaming.video.H263Stream;
 import net.majorkernelpanic.streaming.video.H264Stream;
 import net.majorkernelpanic.streaming.video.H265Stream;
 import net.majorkernelpanic.streaming.video.VideoQuality;
@@ -51,15 +48,10 @@ public class SessionBuilder {
 	public final static int VIDEO_H264 = 1;
 
 	/** Can be used with {@link #setVideoEncoder}. */
-	public final static int VIDEO_H263 = 2;
-
 	public final static int VIDEO_H265 = 3;
 
 	/** Can be used with {@link #setAudioEncoder}. */
 	public final static int AUDIO_NONE = 0;
-
-	/** Can be used with {@link #setAudioEncoder}. */
-	public final static int AUDIO_AMRNB = 3;
 
 	/** Can be used with {@link #setAudioEncoder}. */
 	public final static int AUDIO_AAC = 5;
@@ -129,15 +121,9 @@ public class SessionBuilder {
 			if (mContext!=null) 
 				stream.setPreferences(PreferenceManager.getDefaultSharedPreferences(mContext));
 			break;
-		case AUDIO_AMRNB:
-			session.addAudioTrack(new AMRNBStream());
-			break;
 		}
 
 		switch (mVideoEncoder) {
-		case VIDEO_H263:
-			session.addVideoTrack(new H263Stream(mCamera));
-			break;
 		case VIDEO_H264:
 			H264Stream stream = new H264Stream(mCamera);
 			if (mContext!=null) 

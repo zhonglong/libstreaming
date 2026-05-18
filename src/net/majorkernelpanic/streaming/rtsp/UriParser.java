@@ -19,10 +19,9 @@
 package net.majorkernelpanic.streaming.rtsp;
 
 import static net.majorkernelpanic.streaming.SessionBuilder.AUDIO_AAC;
-import static net.majorkernelpanic.streaming.SessionBuilder.AUDIO_AMRNB;
 import static net.majorkernelpanic.streaming.SessionBuilder.AUDIO_NONE;
-import static net.majorkernelpanic.streaming.SessionBuilder.VIDEO_H263;
 import static net.majorkernelpanic.streaming.SessionBuilder.VIDEO_H264;
+import static net.majorkernelpanic.streaming.SessionBuilder.VIDEO_H265;
 import static net.majorkernelpanic.streaming.SessionBuilder.VIDEO_NONE;
 
 import java.io.IOException;
@@ -174,16 +173,10 @@ public class UriParser {
 					builder.setVideoQuality(quality).setVideoEncoder(VIDEO_H264);
 				}
 
-				// H.263
-				else if (paramName.equalsIgnoreCase("h263")) {
+				// H.265
+				else if (paramName.equalsIgnoreCase("h265")) {
 					VideoQuality quality = VideoQuality.parseQuality(paramValue);
-					builder.setVideoQuality(quality).setVideoEncoder(VIDEO_H263);
-				}
-
-				// AMR
-				else if (paramName.equalsIgnoreCase("amrnb") || paramName.equalsIgnoreCase("amr")) {
-					AudioQuality quality = AudioQuality.parseQuality(paramValue);
-					builder.setAudioQuality(quality).setAudioEncoder(AUDIO_AMRNB);
+					builder.setVideoQuality(quality).setVideoEncoder(VIDEO_H265);
 				}
 
 				// AAC
